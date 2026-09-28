@@ -454,7 +454,6 @@ textarea { resize: vertical; }
 .link-btn.unset { background: transparent; border: 1.5px dashed var(--sand); color: var(--muted); }
 .star { background: none; border: 0; cursor: pointer; font-size: 1.45rem; line-height: 1; color: var(--sand); padding: 0 2px 0 12px; align-self: stretch; }
 .star.on { color: var(--clay); }
-.link-card.is-fav { border-color: var(--sand); background: var(--tint-warm); }
 .link-card .link-main { padding-left: 8px; }
 .cat-hint { color: var(--muted); font-size: .86rem; margin: -6px 0 10px; }
 .cat-h + .btn { margin-bottom: 10px; }
