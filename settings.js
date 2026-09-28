@@ -8,6 +8,17 @@ const Settings = (() => {
   let colorsOpen = false;
 
   const myLook = () => Look.normalize((get(S.uid) || {}).look);
+  // Switches to My palette, starting it from the colors showing now if it's new.
+  function toMine(l) {
+    if (!l.custom) l.custom = { base: l.preset === 'custom' ? 'cottage' : l.preset, c: { ...Look.colorsOf(l) } };
+    l.preset = 'custom';
+    return l;
+  }
+  function saveColor(l) {
+    const first = myLook().preset !== 'custom';
+    if (first) toast('Saved as My palette');
+    return saveLook(l);
+  }
   function saveLook(l) {
     Look.apply(l);
     Look.cache(l);
@@ -100,23 +111,34 @@ const Settings = (() => {
   // ---------- your look ----------
   function lookHtml() {
     const l = myLook(), c = Look.colorsOf(l);
-    const custom = Object.keys(l.colors).length > 0;
+    const mine = l.preset === 'custom';
+    const base = l.custom && Look.builtIn(l.custom.base);
     const pal = p => `<button class="pal${l.preset === p.id ? ' on' : ''}" data-act="preset" data-id="${p.id}" style="background:${p.c.bg};color:${p.c.ink}" aria-pressed="${l.preset === p.id}">
       <span class="dots">${[p.c.primary, p.c.accent, p.c.wood, Look.mix(p.c.bg, p.c.wood, 0.28), p.c.paper].map(x => `<i style="background:${x}"></i>`).join('')}</span>
-      ${esc(p.name)}${l.preset === p.id && custom ? ' <small>(customized)</small>' : ''}</button>`;
+      ${esc(p.name)}</button>`;
+    const myPal = l.custom ? pal({ id: 'custom', name: 'My palette', c: l.custom.c })
+      : `<button class="pal new" data-act="preset" data-id="custom"><span class="plus">+</span>Make my own</button>`;
+    // On a ready-made palette while My palette exists, colors are view-only
+    // (so a stray change can't overwrite My palette).
+    const locked = !mine && !!l.custom;
     const row = ([key, label]) => `<div class="color-row">
-      <input type="color" data-slot="${key}" value="${c[key].toLowerCase()}" aria-label="${label} color">
+      <input type="color" data-slot="${key}" value="${c[key].toLowerCase()}" aria-label="${label} color"${locked ? ' disabled' : ''}>
       <span>${label}</span>
-      <input class="hex" data-hex="${key}" value="${c[key]}" maxlength="7" autocapitalize="characters" autocomplete="off" aria-label="${label} hex code">
-      <button class="icon-btn" data-act="resetColor" data-slot="${key}" title="Back to the palette’s color" aria-label="Reset ${label}"${l.colors[key] ? '' : ' disabled'}>↺</button>
+      <input class="hex" data-hex="${key}" value="${c[key]}" maxlength="7" autocapitalize="characters" autocomplete="off" aria-label="${label} hex code"${locked ? ' disabled' : ''}>
+      <button class="icon-btn" data-act="resetColor" data-slot="${key}" title="Back to ${base ? esc(base.name) : 'the palette'}’s color" aria-label="Reset ${label}"${mine && base && c[key] !== base.c[key] ? '' : ' disabled'}>↺</button>
     </div>`;
     const font = (name, kindOf, sample) => `<button class="font-opt ${kindOf}${l[kindOf] === name ? ' on' : ''}" data-act="font" data-kind="${kindOf}" data-name="${esc(name)}" aria-pressed="${l[kindOf] === name}">
       <span class="sample" style="font-family:'${esc(name)}'">${sample}</span><small>${esc(name)}</small></button>`;
     return `<section class="card pad stack set-card">
       <div><h2>Your look</h2><p class="muted">Just for you. Nick picks his own.</p></div>
-      <div><p class="lbl">Palette</p><div class="palettes">${Look.PRESETS.map(pal).join('')}</div></div>
-      <details class="cust"${colorsOpen ? ' open' : ''}><summary>Customize colors</summary>
+      <div><p class="lbl">Palette</p><div class="palettes">${Look.PRESETS.map(pal).join('')}${myPal}</div></div>
+      <details class="cust"${colorsOpen ? ' open' : ''}><summary>${mine ? 'Edit my palette' : 'Customize colors'}</summary>
+        <p class="muted small">${mine ? `Started from ${esc(base.name)}. ↺ puts a color back to ${esc(base.name)}’s.`
+          : locked ? 'These are this palette’s colors. To change colors, pick My palette, or copy these into it.'
+          : 'Changing a color saves it as My palette, so the ready-made palettes stay as they are.'}</p>
+        ${locked ? '<div class="btn-row"><button class="btn small ghost" data-act="copyToMine">Copy these into My palette</button></div>' : ''}
         <div class="color-rows">${Look.SLOTS.map(row).join('')}</div>
+        ${mine ? `<div class="btn-row"><button class="btn small ghost" data-act="restart">Start my palette over</button><button class="btn small ghost danger" data-act="dropMine">Delete my palette</button></div>` : ''}
       </details>
       <div><p class="lbl">Title font</p><div class="fonts">${Look.TITLE_FONTS.map(([n]) => font(n, 'title', 'The Brown Family Home')).join('')}</div></div>
       <div><p class="lbl">Body font</p><div class="fonts">${Look.BODY_FONTS.map(([n]) => font(n, 'body', 'Kitchen · 3 photos · 13.16 acres')).join('')}</div></div>
@@ -149,18 +171,23 @@ const Settings = (() => {
       Look.useFonts('look-fonts-all', [...Look.TITLE_FONTS, ...Look.BODY_FONTS].map(f => f[0]));
       const details = root.querySelector('details.cust');
       details.addEventListener('toggle', () => { colorsOpen = details.open; });
-      const withColor = (key, val) => { const l = myLook(); l.colors[key] = val.toUpperCase(); return l; };
+      // Any color change goes into My palette (made from what's showing now if needed).
+      const withColor = (key, val) => {
+        const l = toMine(myLook());
+        l.custom.c[key] = val.toUpperCase();
+        return l;
+      };
       root.querySelectorAll('[data-slot]').forEach(inp => {
         if (inp.type !== 'color') return;
         const hexBox = root.querySelector(`[data-hex="${inp.dataset.slot}"]`);
         inp.addEventListener('input', () => { Look.apply(withColor(inp.dataset.slot, inp.value)); hexBox.value = inp.value.toUpperCase(); });
-        inp.addEventListener('change', () => saveLook(withColor(inp.dataset.slot, inp.value)));
+        inp.addEventListener('change', () => saveColor(withColor(inp.dataset.slot, inp.value)));
       });
       root.querySelectorAll('[data-hex]').forEach(inp => inp.addEventListener('change', () => {
         let v = inp.value.trim();
         if (!v.startsWith('#')) v = `#${v}`;
         if (!Look.isHex(v)) { toast('Use a 6-digit color code, like #5E6E51'); inp.value = Look.colorsOf(myLook())[inp.dataset.hex]; return; }
-        saveLook(withColor(inp.dataset.hex, v));
+        saveColor(withColor(inp.dataset.hex, v));
       }));
     },
     acts: {
@@ -180,8 +207,36 @@ const Settings = (() => {
       },
       goal: () => Money.editGoal(),
       name: () => askName(),
-      preset: el => saveLook({ ...myLook(), preset: el.dataset.id, colors: {} }),
-      resetColor(el) { const l = myLook(); delete l.colors[el.dataset.slot]; return saveLook(l); },
+      preset(el) {
+        const l = myLook();
+        if (el.dataset.id !== 'custom') return saveLook({ ...l, preset: el.dataset.id });
+        if (!l.custom) { colorsOpen = true; toast('Made from the palette you had on. Change any color below.'); }
+        return saveLook(toMine(l));
+      },
+      resetColor(el) {
+        const l = myLook();
+        if (!l.custom) return;
+        l.custom.c[el.dataset.slot] = Look.builtIn(l.custom.base).c[el.dataset.slot];
+        return saveLook(l);
+      },
+      async copyToMine() {
+        const l = myLook();
+        const name = Look.builtIn(l.preset).name;
+        if (!(await ask(`Replace My palette with ${name}’s colors?`, { ok: 'Replace', title: 'Replace My palette?' }))) return;
+        colorsOpen = true;
+        return saveLook({ ...l, preset: 'custom', custom: { base: l.preset, c: { ...Look.builtIn(l.preset).c } } });
+      },
+      async restart() {
+        const l = myLook();
+        if (!(await ask(`Put all of My palette back to ${Look.builtIn(l.custom.base).name}’s colors?`, { ok: 'Start over', danger: false, title: 'Start over?' }))) return;
+        l.custom.c = { ...Look.builtIn(l.custom.base).c };
+        return saveLook(l);
+      },
+      async dropMine() {
+        const l = myLook();
+        if (!(await ask('Delete My palette? You’ll go back to the palette it started from.', { ok: 'Delete' }))) return;
+        return saveLook({ ...l, preset: l.custom.base, custom: null });
+      },
       font: el => saveLook({ ...myLook(), [el.dataset.kind]: el.dataset.name }),
       async resetLook() {
         if (!(await ask('Go back to the Cottage colors and the original fonts?', { ok: 'Reset', danger: false, title: 'Reset your look?' }))) return;

@@ -509,3 +509,7 @@ input[type=range]:focus { box-shadow: none; }
 .font-opt .sample { font-size: 1.35rem; line-height: 1.2; color: var(--ink); }
 .font-opt.body .sample { font-size: 1rem; }
 .font-opt small { color: var(--muted); font-size: .78rem; font-family: var(--sans); }
+.pal.new { border-style: dashed; background: transparent; color: var(--sage-deep); align-items: center; justify-content: center; min-height: 72px; flex-direction: row; gap: 6px; }
+.pal.new .plus { font-size: 1.3rem; line-height: 1; }
+.cust .btn-row { margin-top: 10px; }
+.color-row input:disabled { opacity: .55; cursor: default; }

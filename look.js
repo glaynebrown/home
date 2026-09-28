@@ -4,6 +4,10 @@
    your person record, so your phone and computer match, and on this device, so
    it shows the moment the app opens. Loaded in <head>, before the page draws.
 
+   "My palette" is your own six colors, kept separately (look.custom =
+   { base: the palette it started from, c: colors }), so trying the ready-made
+   palettes never loses it.
+
    A palette is six colors; the in-between shades (borders, soft fills, muted
    text) are mixed from those six, so any combination still hangs together. */
 const Look = (() => {
@@ -30,7 +34,7 @@ const Look = (() => {
     ['Source Sans 3', 'system-ui, sans-serif', '400;600;700'],
     ['Lora', 'Georgia, serif', '400;600;700'],
   ];
-  const DEFAULT = { preset: 'cottage', colors: {}, title: 'Cormorant Garamond', body: 'Nunito Sans' };
+  const DEFAULT = { preset: 'cottage', colors: {}, custom: null, title: 'Cormorant Garamond', body: 'Nunito Sans' };
   const KEY = 'home-look';
 
   // ----- color math -----
@@ -44,8 +48,20 @@ const Look = (() => {
   const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
   const isHex = s => /^#[0-9a-f]{6}$/i.test(s || '');
 
-  const normalize = l => ({ ...DEFAULT, ...(l || {}), colors: { ...((l && l.colors) || {}) } });
-  const presetOf = l => PRESETS.find(p => p.id === l.preset) || PRESETS[0];
+  const builtIn = id => PRESETS.find(p => p.id === id) || PRESETS[0];
+  function normalize(l) {
+    l = { ...DEFAULT, ...(l || {}), colors: { ...((l && l.colors) || {}) } };
+    if (l.custom) l.custom = { base: builtIn(l.custom.base).id, c: { ...builtIn(l.custom.base).c, ...l.custom.c } };
+    // Colors changed on a ready-made palette (older saves) become My palette.
+    if (Object.keys(l.colors).length && l.preset !== 'custom') {
+      l.custom = { base: builtIn(l.preset).id, c: { ...builtIn(l.preset).c, ...l.colors } };
+      l.preset = 'custom';
+    }
+    l.colors = {};
+    if (l.preset === 'custom' && !l.custom) l.preset = DEFAULT.preset;
+    return l;
+  }
+  const presetOf = l => (l.preset === 'custom' && l.custom ? { id: 'custom', name: 'My palette', c: l.custom.c } : builtIn(l.preset));
   const colorsOf = l => ({ ...presetOf(l).c, ...Object.fromEntries(Object.entries(l.colors).filter(([, v]) => isHex(v))) });
 
   function vars(l) {
@@ -109,5 +125,5 @@ const Look = (() => {
   // Before anything draws.
   apply(cached());
 
-  return { PRESETS, SLOTS, TITLE_FONTS, BODY_FONTS, DEFAULT, normalize, presetOf, colorsOf, apply, cache, sync, useFonts, isHex, mix };
+  return { PRESETS, builtIn, SLOTS, TITLE_FONTS, BODY_FONTS, DEFAULT, normalize, presetOf, colorsOf, apply, cache, sync, useFonts, isHex, mix };
 })();
