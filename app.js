@@ -28,12 +28,13 @@ const STARTER_BOARDS = ['Kitchen', 'Living room', 'Dining', 'Primary bedroom', '
   'Mudroom & laundry', 'Pantry', 'Front porch', 'Outside the house', 'Barn & homestead', 'Garden & yard'];
 const LINK_CATEGORIES = ['Floor plans & 3D', 'Inspiration', 'Land', 'Building & money', 'Other'];
 const STARTER_LINKS = [
-  ['Space Planner', 'https://app.spaceplanner.co', 'Floor plans & 3D', 'Mock up floor plans and see them in 3D'],
+  ['Space Planner', 'https://app.spaceplanner.co', 'Floor plans & 3D', 'Mock up floor plans and see them in 3D', true],
   ['Planner 5D', 'https://planner5d.com', 'Floor plans & 3D', 'Trace a plan from the book and walk through it in 3D. Has an iPhone app.'],
   ['Homestyler', 'https://www.homestyler.com', 'Floor plans & 3D', 'Free 3D room design and decorating'],
   ['Floorplanner', 'https://floorplanner.com', 'Floor plans & 3D', 'Draw a plan in 2D, then flip to 3D'],
   ['Sweet Home 3D', 'https://www.sweethome3d.com', 'Floor plans & 3D', 'Free download for the Mac. More detailed, more fiddly.'],
-  ['Pinterest', 'https://www.pinterest.com', 'Inspiration', 'Screenshot favorites and add them to a room board'],
+  ['Pinterest', 'https://www.pinterest.com', 'Inspiration', 'Swap in your own board’s link, then screenshot favorites into a room board', true],
+  ['Redfin', 'https://www.redfin.com', 'Land', 'Paste a Redfin listing link into + Property to fill it in', true],
   ['LandWatch', 'https://www.landwatch.com', 'Land', 'Rural land and acreage listings'],
 ];
 
@@ -45,7 +46,7 @@ async function seed() {
     for (let i = 0; i < STARTER_BOARDS.length; i++) await DB.add({ kind: 'board', name: STARTER_BOARDS[i], order: i, cover: null });
   }
   if (!kind('link').length) {
-    for (const [name, url, category, note] of STARTER_LINKS) await DB.add({ kind: 'link', name, url, category, note });
+    for (const [name, url, category, note, fav = false] of STARTER_LINKS) await DB.add({ kind: 'link', name, url, category, note, fav });
   }
   if (DB.demo) await DB.addSamples();
 }
@@ -82,6 +83,8 @@ view.addEventListener('focusout', () => setTimeout(() => { if (pending) refresh(
 window.addEventListener('hashchange', () => render(false));
 
 document.addEventListener('click', e => {
+  const pick = e.target.closest('[data-pickfav]');
+  if (pick && view.contains(pick)) { e.preventDefault(); pickFav(pick.dataset.pickfav); return; }
   const a = e.target.closest('[data-act]');
   if (!a || !view.contains(a) || !current || !current.acts) return;
   const fn = current.acts[a.dataset.act];
@@ -91,11 +94,49 @@ document.addEventListener('click', e => {
 });
 
 // Shared page top: back link (optional), title, and buttons on the right.
-function pageTop(title, { back, sub, right = '' } = {}) {
+function pageTop(title, { back, sub, right = '', link = '' } = {}) {
   return `<header class="page-top">
     ${back ? `<a class="back" href="${back[0]}">${icon('back')}<span>${esc(back[1])}</span></a>` : ''}
-    <div class="page-title"><div><h1>${esc(title)}</h1>${sub ? `<p class="sub">${sub}</p>` : ''}</div><div class="top-btns">${right}</div></div>
+    <div class="page-title"><div><div class="h1-row"><h1>${esc(title)}</h1>${link}</div>${sub ? `<p class="sub">${sub}</p>` : ''}</div><div class="top-btns">${right}</div></div>
   </header>`;
+}
+
+// ---------- favorite links ----------
+// Each section's link button opens the starred link from one Links category.
+const PAGE_LINKS = { Inspiration: 'Rooms', 'Floor plans & 3D': 'Plans', Land: 'Land', 'Building & money': 'Savings' };
+const favLink = cat => kind('link').find(l => l.fav && (l.category || 'Other') === cat);
+
+// own = a link of its own (a room board's Pinterest board), used first.
+function linkBtn(cat, own) {
+  const l = own ? { url: own.url, name: own.name } : favLink(cat);
+  if (l) return `<a class="link-btn" href="${esc(l.url)}" target="_blank" rel="noopener" title="${esc(l.name)}" aria-label="Open ${esc(l.name)}">${icon('links')}</a>`;
+  return `<button class="link-btn unset" data-pickfav="${esc(cat)}" title="Pick a favorite link" aria-label="Pick a favorite ${esc(cat)} link">${icon('links')}</button>`;
+}
+
+// Starring a link makes it the favorite for its category (tap again to unstar).
+async function setFav(link) {
+  const cat = link.category || 'Other';
+  const turnOn = !link.fav;
+  for (const l of kind('link').filter(x => (x.category || 'Other') === cat)) {
+    const want = turnOn && l.id === link.id;
+    if (!!l.fav !== want) await DB.update(l.id, { fav: want });
+  }
+  const page = PAGE_LINKS[cat];
+  if (turnOn) toast(page ? `${link.name} opens from the ${page} page` : `${link.name} is your ${cat} favorite`);
+}
+
+// No favorite yet: pick one of that category's links right here, or add one.
+function pickFav(cat) {
+  const list = kind('link').filter(l => (l.category || 'Other') === cat).sort((a, b) => a.t - b.t);
+  const s = sheet(`${cat} link`, `<p class="intro">Pick the website this button should open. You can change it anytime by starring a different link on the Links page.</p>
+    ${list.length ? `<div class="pick-list">${list.map(l => `<button type="button" class="pick-row" data-id="${l.id}"><b>${esc(l.name)}</b><small>${esc(domain(l.url))}</small></button>`).join('')}</div>`
+      : '<p class="muted">No links in this category yet.</p>'}
+    <button type="button" class="btn ghost" data-new>${icon('plus')} Add a ${esc(cat)} link</button>`, { cls: 'small' });
+  s.el.addEventListener('click', async e => {
+    const row = e.target.closest('[data-id]');
+    if (row) { await setFav(get(row.dataset.id)); s.close(); }
+    if (e.target.closest('[data-new]')) { s.close(); Land.linkForm(null, cat); }
+  });
 }
 // Segmented tabs inside a section, e.g. Plans | Size check.
 function tabs(list, on) {

@@ -101,7 +101,7 @@ const Plans = (() => {
     render([id]) {
       if (id) return detail(id);
       const list = sorted();
-      return `${pageTop('Floor plans', { sub: 'From the plan book and beyond', right: `<button class="btn small" data-act="add">${icon('plus')} Plan</button>` })}
+      return `${pageTop('Floor plans', { link: linkBtn('Floor plans & 3D'), sub: 'From the plan book and beyond', right: `<button class="btn small" data-act="add">${icon('plus')} Plan</button>` })}
       ${tabs(TABS, '#/plans')}
       ${list.length ? `<div class="grid plans">${list.map(p => {
         const est = estimate(p);
@@ -214,7 +214,7 @@ const Plans = (() => {
     nav: 'plans',
     render() {
       const rooms = myRooms();
-      return `${pageTop('Size check', { sub: 'What does this size feel like?' })}
+      return `${pageTop('Size check', { link: linkBtn('Floor plans & 3D'), sub: 'What does this size feel like?' })}
       ${tabs(TABS, '#/size')}
       <section class="card pad">
         <label class="field"><span class="lbl">Room size from a plan</span>

@@ -55,7 +55,7 @@ const Land = (() => {
       const list = filter === 'all' ? all : all.filter(p => p.status === filter);
       const count = s => all.filter(p => p.status === s).length;
       const chip = (key, text) => `<button class="chip${filter === key ? ' on' : ''}" data-act="filter" data-f="${key}">${text}</button>`;
-      return `${pageTop('Land', { sub: 'Properties we’re watching', right: `<button class="btn small" data-act="add">${icon('plus')} Property</button>` })}
+      return `${pageTop('Land', { link: linkBtn('Land'), sub: 'Properties we’re watching', right: `<button class="btn small" data-act="add">${icon('plus')} Property</button>` })}
       ${all.length ? `<div class="bar-row">${chip('all', 'All')}${STATUS.filter(([k]) => count(k)).map(([k, t]) => chip(k, `${t} (${count(k)})`)).join('')}</div>` : ''}
       ${list.length ? `<div class="grid plans">${list.map(p => `<a class="plan-card${p.status === 'pass' ? ' faded' : ''}" href="#/land/${p.id}">${cover((p.photos || [])[0], 'land')}
           <div class="tile-txt"><div class="title-row"><h3>${esc(p.name)}</h3><span class="badge ${esc(p.status || 'looking')}">${statusName(p.status)}</span></div>
@@ -140,19 +140,25 @@ const Land = (() => {
   }
 
   // ---------- links ----------
-  function linkForm(l) {
+  function linkForm(l, cat) {
     form({
       title: l ? 'Edit link' : 'New link',
       fields: [
         { name: 'name', label: 'Name', value: l?.name, placeholder: 'Space Planner', required: true, autofocus: !l },
         { name: 'url', label: 'Web address', type: 'url', value: l?.url, placeholder: 'app.spaceplanner.co', required: true },
-        { name: 'category', label: 'Type', type: 'select', value: l?.category || LINK_CATEGORIES[0], options: LINK_CATEGORIES.map(c => [c, c]) },
+        { name: 'category', label: 'Type', type: 'select', value: l?.category || cat || LINK_CATEGORIES[0], options: LINK_CATEGORIES.map(c => [c, c]) },
         { name: 'note', label: 'Note', value: l?.note, placeholder: 'What it’s good for' },
       ],
       save: async v => {
         if (!domain(v.url)) throw new Error('That web address doesn’t look right.');
-        if (l) return DB.update(l.id, v);
-        await DB.add({ kind: 'link', ...v });
+        if (l) {
+          // Moving a favorite to another category drops the star.
+          return DB.update(l.id, v.category !== l.category ? { ...v, fav: false } : v);
+        }
+        // The first link in a category becomes its favorite.
+        const fav = !favLink(v.category);
+        await DB.add({ kind: 'link', ...v, fav });
+        if (fav && PAGE_LINKS[v.category]) toast(`${v.name} opens from the ${PAGE_LINKS[v.category]} page`);
       },
       remove: l && (async () => {
         if (!(await ask(`Delete “${l.name}”?`))) return false;
@@ -168,13 +174,19 @@ const Land = (() => {
 
   Views.links = {
     nav: 'links',
-    render() {
+    render([focus]) {
       const all = kind('link').sort((a, b) => a.t - b.t);
       const cats = [...LINK_CATEGORIES, ...new Set(all.map(l => l.category).filter(c => !LINK_CATEGORIES.includes(c)))];
-      return `${pageTop('Design links', { sub: 'Tools for mocking up plans in 3D, and other helpful sites', right: `<button class="btn small" data-act="add">${icon('plus')} Link</button>` })}
-      ${all.length ? cats.map(c => {
+      return `${pageTop('Design links', { sub: 'Star a favorite in each group and it opens from that page’s link button', right: `<button class="btn small" data-act="add">${icon('plus')} Link</button>` })}
+      ${all.length || focus ? cats.map(c => {
         const list = all.filter(l => (l.category || 'Other') === c);
-        return list.length ? `<section><h2 class="cat-h">${esc(c)}</h2><div class="grid links">${list.map(l => `<div class="link-card">
+        const page = PAGE_LINKS[c];
+        const fav = list.find(l => l.fav);
+        const hint = page ? `<p class="cat-hint">${fav ? `★ ${esc(fav.name)} opens from the ${page} page` : `Star one to open it from the ${page} page`}</p>` : '';
+        return list.length || c === focus ? `<section id="cat-${encodeURIComponent(c)}"><h2 class="cat-h">${esc(c)}</h2>${hint}
+          ${list.length ? '' : `<button class="btn small ghost" data-act="add" data-cat="${esc(c)}">${icon('plus')} Add a link</button>`}
+          <div class="grid links">${list.map(l => `<div class="link-card${l.fav ? ' is-fav' : ''}">
+            <button class="star${l.fav ? ' on' : ''}" data-act="star" data-id="${l.id}" aria-pressed="${!!l.fav}" aria-label="${l.fav ? 'Favorite' : 'Make favorite'}: ${esc(l.name)}">${l.fav ? '★' : '☆'}</button>
             <a href="${esc(l.url)}" target="_blank" rel="noopener" class="link-main">
               <span class="mono" style="background:${tint(l.name)}">${esc(l.name.trim()[0] || '?').toUpperCase()}</span>
               <span class="link-txt"><b>${esc(l.name)}</b><small>${esc(domain(l.url))}</small>${l.note ? `<span>${esc(l.note)}</span>` : ''}</span>
@@ -184,11 +196,16 @@ const Land = (() => {
           </div>`).join('')}</div></section>` : '';
       }).join('') : empty('links', 'No links yet', 'Save websites for mocking up floor plans in 3D, finding land and inspiration.', `<button class="btn" data-act="add">${icon('plus')} Add a link</button>`)}`;
     },
+    after(root, [focus]) {
+      const sec = focus && root.querySelector(`#cat-${CSS.escape(encodeURIComponent(focus))}`);
+      if (sec) sec.scrollIntoView({ block: 'start' });
+    },
     acts: {
-      add: () => linkForm(null),
+      add: el => linkForm(null, el.dataset.cat),
       edit: el => linkForm(get(el.dataset.id)),
+      star: el => setFav(get(el.dataset.id)),
     },
   };
 
-  return { form: landForm };
+  return { form: landForm, linkForm };
 })();

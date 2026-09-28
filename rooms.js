@@ -59,7 +59,7 @@ const Rooms = (() => {
     render([id]) {
       if (id) return board(id);
       const list = boards();
-      return `${pageTop('Room boards', { sub: 'Ideas and inspiration for every room', right: `<button class="btn small" data-act="addBoard">${icon('plus')} Room</button>` })}
+      return `${pageTop('Room boards', { link: linkBtn('Inspiration'), sub: 'Ideas and inspiration for every room', right: `<button class="btn small" data-act="addBoard">${icon('plus')} Room</button>` })}
       ${list.length ? `<div class="grid boards">${list.map(b => {
         const pins = pinsIn(b.id);
         const loved = pins.filter(p => p.fav).length;
@@ -103,6 +103,7 @@ const Rooms = (() => {
           title: 'Edit board',
           fields: [
             { name: 'name', label: 'Room', value: b.name, required: true },
+            { name: 'link', label: 'Link for this room (optional)', type: 'url', value: b.link || '', placeholder: 'pinterest.com/you/dream-kitchen', hint: 'The link button on this board opens it. Leave blank to use your Inspiration favorite.' },
             { name: 'pos', label: 'Position in the list', type: 'select', value: at, options: list.map((x, i) => [i, `${i + 1}. ${x.id === b.id ? '(here now)' : x.name}`]) },
           ],
           save: async v => {
@@ -110,7 +111,7 @@ const Rooms = (() => {
             order.splice(+v.pos, 0, b);
             for (let i = 0; i < order.length; i++) {
               const x = order[i];
-              const patch = x.id === b.id ? { name: v.name, order: i } : { order: i };
+              const patch = x.id === b.id ? { name: v.name, link: v.link, order: i } : { order: i };
               if (x.id === b.id || x.order !== i) await DB.update(x.id, patch);
             }
           },
@@ -135,6 +136,7 @@ const Rooms = (() => {
     const lovedN = all.filter(p => p.fav).length;
     return `${pageTop(b.name, {
       back: ['#/rooms', 'Room boards'],
+      link: linkBtn('Inspiration', b.link && { url: b.link, name: `${b.name} board link` }),
       sub: `${all.length} photo${all.length === 1 ? '' : 's'}`,
       right: `<button class="icon-btn" data-act="editBoard" data-id="${id}" aria-label="Edit board">${icon('edit')}</button>`,
     })}

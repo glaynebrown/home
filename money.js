@@ -48,7 +48,7 @@ const Money = (() => {
   }
 
   Views.money = {
-    nav: 'money',
+    nav: 'home',
     render() {
       const st = settings();
       const saved = savedTotal(), goal = st.goal || 0;
@@ -57,7 +57,7 @@ const Money = (() => {
       const shown = showAll ? list : list.slice(0, 6);
       const topPlan = Plans.sorted().find(p => p.sqft);
       const est = topPlan && Plans.estimate(topPlan);
-      return `${pageTop('Savings', { sub: 'Our land and build fund' })}
+      return `${pageTop('Savings', { back: ['#/', 'Home'], link: linkBtn('Building & money'), sub: 'Our land and build fund' })}
       ${tabs(TABS, '#/money')}
       <section class="card pad goal-card">
         <div class="goal-house">${houseSvg(pct)}</div>
@@ -139,7 +139,7 @@ const Money = (() => {
     <p><span class="eyebrow">${label}</span>${esc(text || '')}</p></div>`;
 
   Views.upgrades = {
-    nav: 'money',
+    nav: 'home',
     render() {
       const all = kind('upgrade').sort((a, b) => !!a.done - !!b.done || (a.room || '').localeCompare(b.room || '') || a.t - b.t);
       if ((filter === 'prep' && !all.some(u => u.prep && !u.done)) || (filter === 'done' && !all.some(u => u.done))) filter = 'all';
@@ -147,7 +147,7 @@ const Money = (() => {
       const total = all.filter(u => !u.done).reduce((s, u) => s + (u.cost || 0), 0);
       const prepN = all.filter(u => u.prep && !u.done).length, doneN = all.filter(u => u.done).length;
       const chip = (key, text) => `<button class="chip${filter === key ? ' on' : ''}" data-act="filter" data-f="${key}">${text}</button>`;
-      return `${pageTop('Upgrades', { sub: 'Start basic now, upgrade someday', right: `<button class="btn small" data-act="add">${icon('plus')} Upgrade</button>` })}
+      return `${pageTop('Upgrades', { back: ['#/', 'Home'], link: linkBtn('Building & money'), sub: 'Start basic now, upgrade someday', right: `<button class="btn small" data-act="add">${icon('plus')} Upgrade</button>` })}
       ${tabs(TABS, '#/upgrades')}
       ${all.length ? `<div class="bar-row">${chip('all', 'Wishlist')}${prepN ? chip('prep', `Prep at build (${prepN})`) : ''}${doneN ? chip('done', `Done (${doneN})`) : ''}
         ${total ? `<span class="total">Wishlist total <b>${money(total)}</b></span>` : ''}</div>` : ''}
