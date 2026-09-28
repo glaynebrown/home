@@ -196,6 +196,8 @@ Views.home = {
       ${tile('#/links', 'links', 'Design links', `${links.length} saved`, null)}
     </div>
 
+    ${notesCard()}
+
     ${strip.length ? `<section class="strip-wrap">
       <div class="row-head"><h2>${loved.length >= 4 ? 'Loved ideas' : 'Newest ideas'}</h2><a href="#/rooms">All boards</a></div>
       <div class="strip">${strip.map((p, i) => `<button class="strip-pin" data-act="pin" data-i="${i}"><img src="${esc(thumb(p.photo))}" alt="${esc(p.caption || '')}" loading="lazy"></button>`).join('')}</div>
@@ -210,6 +212,17 @@ Views.home = {
     },
   },
 };
+
+// Every room's notes at a glance; tap one to open that board.
+function notesCard() {
+  const rooms = kind('board').filter(b => Rooms.notesOf(b, 'starter') || Rooms.notesOf(b, 'upgrade')).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const part = (b, s) => Rooms.notesOf(b, s) ? `<span class="side-note"><i>${Rooms.SIDES[s]}</i>${esc(Rooms.notesOf(b, s))}</span>` : '';
+  return `<section class="card pad room-notes">
+    <div class="row-head"><h2>${icon('note')} Room notes</h2><a href="#/rooms">All rooms</a></div>
+    ${rooms.length ? `<ul>${rooms.map(b => `<li><a href="#/rooms/${b.id}"><b>${esc(b.name)}</b>${part(b, 'starter')}${part(b, 'upgrade')}</a></li>`).join('')}</ul>`
+      : '<p class="muted">Open any room board and tap <b>Add notes</b>. Everything you write shows up here.</p>'}
+  </section>`;
+}
 
 // The top of the home page: your photo (placed the way you set it in
 // Settings → Adjust photo) or the farmhouse drawing. Also used by the adjuster.

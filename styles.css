@@ -517,3 +517,46 @@ input[type=range]:focus { box-shadow: none; }
 .paste.in-form[open] { gap: 8px; }
 .tips-list { margin: 0; padding-left: 18px; font-size: .88rem; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
 .tips-list b { color: var(--ink); }
+
+/* Room notes */
+.notes-card .row-head { margin-bottom: 6px; }
+.notes-card h2, .room-notes h2 { display: flex; align-items: center; gap: 8px; }
+.notes-card h2 .ic, .room-notes h2 .ic { color: var(--sage-deep); }
+.notes.clamp { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.notes-card .more { padding: 4px 0 0; }
+.notes-card .muted.small { margin-top: 8px; }
+.add-notes { display: flex; align-items: center; gap: 8px; width: 100%; padding: 14px 16px; border-radius: var(--r); border: 2px dashed var(--sand); background: transparent; color: var(--sage-deep); font-weight: 700; cursor: pointer; text-align: left; }
+.room-notes ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.room-notes li + li { border-top: 1px solid var(--line); }
+.room-notes li a { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; text-decoration: none; color: inherit; }
+.room-notes li b { font-family: var(--serif); font-size: calc(1.15rem * var(--ts)); color: var(--sage-deep); }
+.room-notes li .side-note { white-space: pre-line; color: var(--ink); font-size: .92rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.side-note i { font-style: normal; font-weight: 800; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
+
+/* Starter | Upgrades toggle on a room board */
+.side-toggle { display: grid; grid-template-columns: 1fr 1fr; background: var(--cream); border-radius: 999px; padding: 4px; }
+.side-toggle button { border: 0; background: none; border-radius: 999px; padding: 10px 8px; font-weight: 800; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.side-toggle button span { font-size: .75rem; font-weight: 700; background: var(--paper); color: var(--muted); border-radius: 999px; padding: 1px 8px; }
+.side-toggle button.on { background: var(--paper); color: var(--sage-deep); box-shadow: var(--shadow); }
+.side-toggle button.on span { background: var(--sage-soft); color: var(--sage-deep); }
+
+/* Things to decide (room boards) */
+.focus { display: flex; flex-direction: column; gap: 8px; }
+.focus .lbl .muted { font-weight: 600; }
+.focus-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.focus-chips .chip { min-height: 32px; padding: 0 12px; font-size: .84rem; }
+
+/* Upgrades page: rooms */
+.room-up { display: flex; flex-direction: column; gap: 12px; }
+.room-up .row-head { margin-bottom: 0; }
+.room-up > .pair { text-decoration: none; color: inherit; max-width: 460px; }
+.compare-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.compare-rows li { display: grid; grid-template-columns: 1fr 18px 1fr; grid-template-areas: "label label label" "from arrow to"; gap: 2px 8px; padding: 8px 0; align-items: center; }
+.compare-rows li + li { border-top: 1px solid var(--line); }
+.compare-rows b { grid-area: label; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.compare-rows .from { grid-area: from; }
+.compare-rows .to { grid-area: to; color: var(--sage-deep); font-weight: 700; }
+.compare-rows .ic { grid-area: arrow; width: 16px; height: 16px; color: var(--wood); }
+.compare-rows i { color: var(--muted); font-weight: 400; }
+.room-up .side-note { font-size: .9rem; }
+.room-up > .btn { align-self: flex-start; }
