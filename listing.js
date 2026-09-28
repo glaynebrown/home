@@ -79,6 +79,15 @@ const Listing = (() => {
     };
   }
 
+  // Sites that turn away automated readers; for these the link itself is all we get.
+  const BLOCKED = /(^|\.)(redfin|zillow)\.com$/i;
+  const siteName = link => { const d = domain(link); return /redfin/i.test(d) ? 'Redfin' : /zillow/i.test(d) ? 'Zillow' : d || 'That site'; };
+
+  // How to get a listing's text on an iPhone.
+  const TIPS = `<ul class="tips-list">
+    <li><b>Screenshot</b> the listing, open the screenshot in Photos, tap the <b>Live Text</b> button (bottom corner), then <b>Copy All</b>.</li>
+    <li>Or in Safari, press and hold the description, then <b>Select All</b> → <b>Copy</b>.</li></ul>`;
+
   const blobOf = p => new Blob([Uint8Array.from(atob(p.data), c => c.charCodeAt(0))], { type: p.type });
 
   // The first step of "+ Property": link, pasted text, or type it in.
@@ -89,7 +98,7 @@ const Listing = (() => {
       <button type="button" class="btn" data-fetch>Fill in from link</button>
       <p class="form-err" hidden></p>
       <details class="paste"><summary>Or paste the listing text</summary>
-        <p class="muted small">On the listing, select all the text, copy it, and paste it here.</p>
+        ${TIPS}
         <textarea name="text" rows="6" placeholder="Paste here"></textarea>
         <button type="button" class="btn ghost" data-text>Fill in from text</button>
       </details>
@@ -102,6 +111,11 @@ const Listing = (() => {
     go.onclick = async () => {
       err.hidden = true;
       if (!domain(link())) { err.textContent = 'Paste a listing link first.'; err.hidden = false; return; }
+      // Link-only fill for sites that won't share; the form offers pasting for the rest.
+      const fromLink = why => open({ link: link(), ...fromUrl(link()), note: why, pasteOpen: true });
+      if (BLOCKED.test(domain(link()))) {
+        return fromLink(`${siteName(link())} doesn’t let apps read its listings, so we filled in what the link says. Paste the listing text below to add the price, acres and more.`);
+      }
       go.disabled = true; go.textContent = 'Reading the listing…';
       try {
         const r = await DB.preview(link());
@@ -111,11 +125,7 @@ const Listing = (() => {
         open(pre);
       } catch (e) {
         console.error(e);
-        go.disabled = false; go.textContent = 'Fill in from link';
-        err.textContent = `${e.message || 'Couldn’t read that listing.'} You can paste the listing text below, or continue with just the link.`;
-        err.hidden = false;
-        s.q('details.paste').open = true;
-        skip.textContent = 'Continue with just the link';
+        fromLink(`${siteName(link())} didn’t share the listing details, so we filled in what the link says. Paste the listing text below to add the price, acres and more.`);
       }
     };
     s.q('[data-text]').onclick = () => {
@@ -126,5 +136,5 @@ const Listing = (() => {
     skip.onclick = () => open(link() && domain(link()) ? { link: link(), ...fromUrl(link()) } : {});
   }
 
-  return { start, build, HINT_NAMES };
+  return { start, build, HINT_NAMES, TIPS };
 })();

@@ -513,3 +513,8 @@ input[type=range]:focus { box-shadow: none; }
 .pal.new .plus { font-size: 1.3rem; line-height: 1; }
 .cust .btn-row { margin-top: 10px; }
 .color-row input:disabled { opacity: .55; cursor: default; }
+.intro { display: flex; flex-direction: column; gap: 8px; }
+.paste.in-form { background: var(--cream); border-radius: 12px; padding: 10px 12px; color: var(--ink); }
+.paste.in-form[open] { gap: 8px; }
+.tips-list { margin: 0; padding-left: 18px; font-size: .88rem; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+.tips-list b { color: var(--ink); }

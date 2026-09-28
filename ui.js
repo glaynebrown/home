@@ -166,6 +166,7 @@ function fieldHtml(f) {
       return `<div class="field photo-field" data-photo="${f.name}">${label}<div class="pf">
         <div class="pf-thumb">${v ? `<img src="${esc(thumb(v))}" alt="">` : icon('camera')}</div>
         <div class="pf-btns"><button type="button" class="btn small ghost" data-pick>${v ? 'Change' : 'Choose photo'}</button>
+        ${navigator.clipboard && navigator.clipboard.read ? '<button type="button" class="btn small ghost" data-paste-photo>Paste photo</button>' : ''}
         <button type="button" class="btn small ghost" data-clear${v ? '' : ' hidden'}>Remove</button></div></div>${hint}</div>`;
     default: {
       const numeric = f.type === 'money' || f.type === 'number';
@@ -179,7 +180,7 @@ function fieldHtml(f) {
 }
 
 function form({ title, intro = '', fields, save, remove, saveLabel = 'Save', removeLabel = 'Delete' }) {
-  const s = sheet(title, `<form novalidate>${intro ? `<p class="intro">${intro}</p>` : ''}${fields.map(fieldHtml).join('')}
+  const s = sheet(title, `<form novalidate>${intro ? `<div class="intro">${intro}</div>` : ''}${fields.map(fieldHtml).join('')}
     <p class="form-err" hidden></p>
     <div class="sheet-actions">${remove ? `<button type="button" class="btn ghost danger" data-remove>${esc(removeLabel)}</button>` : ''}<span class="grow"></span>
       <button class="btn" data-save>${esc(saveLabel)}</button></div></form>`);
@@ -201,6 +202,25 @@ function form({ title, intro = '', fields, save, remove, saveLabel = 'Save', rem
       box.querySelector('.pf-thumb').innerHTML = `<img src="${URL.createObjectURL(file)}" alt="">`;
       box.querySelector('[data-pick]').textContent = 'Change';
       box.querySelector('[data-clear]').hidden = false;
+    };
+    // A photo copied in Safari (press and hold → Copy).
+    const pasteBtn = box.querySelector('[data-paste-photo]');
+    if (pasteBtn) pasteBtn.onclick = async () => {
+      try {
+        let blob = null;
+        for (const item of await navigator.clipboard.read()) {
+          const type = item.types.find(t => t.startsWith('image/'));
+          if (type) { blob = await item.getType(type); break; }
+        }
+        if (!blob) return toast('No photo copied yet. In Safari, press and hold a photo → Copy.', 4000);
+        st.file = blob; st.removed = false;
+        box.querySelector('.pf-thumb').innerHTML = `<img src="${URL.createObjectURL(blob)}" alt="">`;
+        box.querySelector('[data-pick]').textContent = 'Change';
+        box.querySelector('[data-clear]').hidden = false;
+      } catch (e) {
+        console.warn(e);
+        toast('Couldn’t paste. In Safari, press and hold a photo → Copy, then try again.', 4000);
+      }
     };
     box.querySelector('[data-clear]').onclick = () => {
       st.file = null; st.removed = true;

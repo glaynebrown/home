@@ -19,15 +19,21 @@ const Land = (() => {
     const v0 = p || pre;
     const hinted = !p && pre.checks ? Object.keys(pre.checks).map(k => Listing.HINT_NAMES[k]).filter(Boolean) : [];
     const filled = !p && (pre.price || pre.acres || pre.photoBlob || pre.notes);
-    form({
+    const checks = { ...(pre.checks || {}) };
+    const msg = pre.note ? `<p>${esc(pre.note)}</p>`
+      : filled ? `<p>Filled in from the listing. Check it over, then save.${hinted.length ? ` The listing also mentions: <b>${hinted.map(esc).join(', ')}</b>, so ${hinted.length > 1 ? 'those are' : 'that’s'} checked on the checklist for you to confirm.` : ''}</p>` : '';
+    const pasteBox = p ? '' : `<details class="paste in-form"${pre.pasteOpen ? ' open' : ''}><summary>Paste the listing text to fill in more</summary>
+      ${Listing.TIPS}<textarea data-paste rows="5" placeholder="Paste here"></textarea>
+      <button type="button" class="btn small" data-fill>Fill in from text</button></details>`;
+    const s = form({
       title: p ? 'Edit property' : 'New property',
-      intro: filled ? `Filled in from the listing. Check it over, then save.${hinted.length ? ` The listing also mentions: <b>${hinted.map(esc).join(', ')}</b>, so ${hinted.length > 1 ? 'those are' : 'that’s'} checked on the checklist for you to confirm.` : ''}` : '',
+      intro: msg + pasteBox,
       fields: [
         { name: 'name', label: 'Name', value: v0.name, placeholder: 'Pasture off Route 9', required: true, autofocus: !p && !v0.name },
         { name: 'place', label: 'Where', value: v0.place, placeholder: 'County, town' },
         { name: 'acres', label: 'Acres', type: 'number', value: v0.acres, placeholder: '15' },
         { name: 'price', label: 'Price', type: 'money', value: v0.price ?? '', placeholder: '120,000' },
-        ...(p ? [] : [{ name: 'photo', label: 'Main photo', type: 'photo', value: null, file: pre.photoBlob }]),
+        ...(p ? [] : [{ name: 'photo', label: 'Main photo', type: 'photo', value: null, file: pre.photoBlob, hint: 'From a listing: in Safari, press and hold its photo → Copy, then tap Paste photo.' }]),
         { name: 'status', label: 'Status', type: 'select', value: v0.status || 'looking', options: STATUS },
         { name: 'link', label: 'Listing link', type: 'url', value: v0.link, placeholder: 'redfin.com/…' },
         { name: 'notes', label: 'Notes', type: 'textarea', value: v0.notes, rows: 5, placeholder: 'Creek on the back side, flat spot near the road…' },
@@ -35,7 +41,7 @@ const Land = (() => {
       save: async v => {
         if (p) return DB.update(p.id, v);
         const { photo, ...rest } = v;
-        const id = await DB.add({ kind: 'land', ...rest, hearts: 0, photos: photo ? [photo] : [], checks: pre.checks || {} });
+        const id = await DB.add({ kind: 'land', ...rest, hearts: 0, photos: photo ? [photo] : [], checks });
         location.hash = `#/land/${id}`;
       },
       remove: p && (async () => {
@@ -45,6 +51,33 @@ const Land = (() => {
         return true;
       }),
     });
+
+    // Pasted listing text fills in what it finds (and never erases what's there).
+    if (!p) s.q('[data-fill]').onclick = () => {
+      const text = s.q('[data-paste]').value;
+      if (!text.trim()) return toast('Paste the listing text first.');
+      const f = s.q('form').elements;
+      const got = Listing.build({ link: fixUrl(f.link.value), text });
+      const found = [];
+      const put = (name, val, label, replace) => {
+        if (val == null || val === '') return;
+        if (!replace && f[name].value.trim()) return;
+        f[name].value = name === 'price' ? commas(val) : val;
+        found.push(label);
+      };
+      put('name', got.name, 'name');
+      put('place', got.place, 'place');
+      put('acres', got.acres, 'acres', true);
+      put('price', got.price, 'price', true);
+      put('notes', got.notes, 'notes');
+      const newChecks = Object.keys(got.checks).filter(k => !checks[k]);
+      Object.assign(checks, got.checks);
+      const extra = newChecks.map(k => Listing.HINT_NAMES[k]).filter(Boolean);
+      s.q('details.paste').open = false;
+      toast(found.length || extra.length
+        ? `Filled in ${found.join(', ') || 'the checklist'}${extra.length ? `. Checklist: ${extra.join(', ')}` : ''}`
+        : 'Couldn’t find a price or acres in that text.', 4000);
+    };
   }
 
   Views.land = {
