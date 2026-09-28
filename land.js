@@ -1,0 +1,194 @@
+/* Land and design links.
+   #/land          properties you're watching
+   #/land/{id}     one property: photos, numbers, checklist, notes
+   #/links         saved websites (floor plan + 3D tools, inspiration, land) */
+const Land = (() => {
+  const STATUS = [['looking', 'Looking'], ['visited', 'Visited'], ['favorite', 'Favorite'], ['pass', 'Passed']];
+  const statusName = s => (STATUS.find(x => x[0] === s) || STATUS[0])[1];
+  const CHECKS = [
+    ['road', 'Road access'], ['power', 'Power nearby'], ['water', 'Water / well'], ['perc', 'Perc test (septic)'],
+    ['zoning', 'Zoning OK for what we want'], ['internet', 'Internet / cell signal'], ['flood', 'Not in a flood zone'], ['spot', 'Good building spot'],
+  ];
+  let filter = 'all';
+
+  const perAcre = p => (p.price && p.acres ? p.price / p.acres : null);
+  const facts = p => [p.acres && `${commas(p.acres)} acres`, p.price && money(p.price), perAcre(p) && `${money(perAcre(p))}/acre`].filter(Boolean).join(' · ');
+
+  // pre = values filled in from a listing (listing.js), for a new property.
+  function landForm(p, pre = {}) {
+    const v0 = p || pre;
+    const hinted = !p && pre.checks ? Object.keys(pre.checks).map(k => Listing.HINT_NAMES[k]).filter(Boolean) : [];
+    const filled = !p && (pre.price || pre.acres || pre.photoBlob || pre.notes);
+    form({
+      title: p ? 'Edit property' : 'New property',
+      intro: filled ? `Filled in from the listing. Check it over, then save.${hinted.length ? ` The listing also mentions: <b>${hinted.map(esc).join(', ')}</b>, so ${hinted.length > 1 ? 'those are' : 'that’s'} checked on the checklist for you to confirm.` : ''}` : '',
+      fields: [
+        { name: 'name', label: 'Name', value: v0.name, placeholder: 'Pasture off Route 9', required: true, autofocus: !p && !v0.name },
+        { name: 'place', label: 'Where', value: v0.place, placeholder: 'County, town' },
+        { name: 'acres', label: 'Acres', type: 'number', value: v0.acres, placeholder: '15' },
+        { name: 'price', label: 'Price', type: 'money', value: v0.price ?? '', placeholder: '120,000' },
+        ...(p ? [] : [{ name: 'photo', label: 'Main photo', type: 'photo', value: null, file: pre.photoBlob }]),
+        { name: 'status', label: 'Status', type: 'select', value: v0.status || 'looking', options: STATUS },
+        { name: 'link', label: 'Listing link', type: 'url', value: v0.link, placeholder: 'redfin.com/…' },
+        { name: 'notes', label: 'Notes', type: 'textarea', value: v0.notes, rows: 5, placeholder: 'Creek on the back side, flat spot near the road…' },
+      ],
+      save: async v => {
+        if (p) return DB.update(p.id, v);
+        const { photo, ...rest } = v;
+        const id = await DB.add({ kind: 'land', ...rest, hearts: 0, photos: photo ? [photo] : [], checks: pre.checks || {} });
+        location.hash = `#/land/${id}`;
+      },
+      remove: p && (async () => {
+        if (!(await ask(`Delete “${p.name}” and its photos?`))) return false;
+        await DB.remove(p);
+        location.hash = '#/land';
+        return true;
+      }),
+    });
+  }
+
+  Views.land = {
+    nav: 'land',
+    render([id]) {
+      if (id) return detail(id);
+      const all = kind('land').sort((a, b) => (a.status === 'pass') - (b.status === 'pass') || (b.hearts || 0) - (a.hearts || 0) || newest(a, b));
+      const list = filter === 'all' ? all : all.filter(p => p.status === filter);
+      const count = s => all.filter(p => p.status === s).length;
+      const chip = (key, text) => `<button class="chip${filter === key ? ' on' : ''}" data-act="filter" data-f="${key}">${text}</button>`;
+      return `${pageTop('Land', { sub: 'Properties we’re watching', right: `<button class="btn small" data-act="add">${icon('plus')} Property</button>` })}
+      ${all.length ? `<div class="bar-row">${chip('all', 'All')}${STATUS.filter(([k]) => count(k)).map(([k, t]) => chip(k, `${t} (${count(k)})`)).join('')}</div>` : ''}
+      ${list.length ? `<div class="grid plans">${list.map(p => `<a class="plan-card${p.status === 'pass' ? ' faded' : ''}" href="#/land/${p.id}">${cover((p.photos || [])[0], 'land')}
+          <div class="tile-txt"><div class="title-row"><h3>${esc(p.name)}</h3><span class="badge ${esc(p.status || 'looking')}">${statusName(p.status)}</span></div>
+          ${hearts(p.hearts)}<p>${facts(p) || esc(p.place || '')}</p>${p.place && facts(p) ? `<p class="muted">${esc(p.place)}</p>` : ''}</div></a>`).join('')}</div>`
+        : all.length ? '<p class="muted center">Nothing here.</p>'
+          : empty('land', 'No properties yet', 'Save listings you’re watching and photos from land visits, then compare them side by side.', `<button class="btn" data-act="add">${icon('plus')} Add a property</button>`)}`;
+    },
+    acts: {
+      add: () => Listing.start(),
+      edit: el => landForm(get(el.dataset.id)),
+      filter(el) { filter = el.dataset.f; render(true); },
+      async hearts(el) {
+        const p = get(el.dataset.id), n = +el.dataset.n;
+        await DB.update(p.id, { hearts: p.hearts === n ? n - 1 : n });
+      },
+      // Tap cycles: not sure -> yes -> no -> not sure.
+      async check(el) {
+        const p = get(el.dataset.id), key = el.dataset.k;
+        const cur = (p.checks || {})[key];
+        const next = !cur ? 'yes' : cur === 'yes' ? 'no' : null;
+        const checks = { ...(p.checks || {}) };
+        if (next) checks[key] = next; else delete checks[key];
+        await DB.update(p.id, { checks });
+      },
+      async addPhotos(el) {
+        const p = get(el.dataset.id);
+        await addPhotos(async photos => DB.update(p.id, { photos: [...(get(p.id).photos || []), ...photos] }));
+      },
+      photo(el) {
+        const p = get(el.dataset.id);
+        viewer((p.photos || []).map((photo, k) => ({
+          photo, title: p.name,
+          actions: [
+            { label: 'Make first', fn: async () => {
+              const cur = get(p.id).photos || [];
+              await DB.update(p.id, { photos: [cur[k], ...cur.filter((_, j) => j !== k)] });
+              toast('Moved to the front');
+              return 'close';
+            } },
+            { label: 'Delete', danger: true, fn: async () => {
+              if (!(await ask('Delete this photo?'))) return;
+              const cur = get(p.id).photos || [];
+              await DB.update(p.id, { photos: cur.filter((_, j) => j !== k) });
+              DB.dropPhotos([cur[k]]);
+              return 'close';
+            } },
+          ],
+        })), +el.dataset.i);
+      },
+    },
+  };
+
+  function detail(id) {
+    const p = get(id);
+    if (!p) return empty('land', 'Property not found', 'It may have been deleted.', '<a class="btn" href="#/land">All land</a>');
+    const photos = p.photos || [];
+    const checks = p.checks || {};
+    const yes = CHECKS.filter(([k]) => checks[k] === 'yes').length;
+    return `${pageTop(p.name, {
+      back: ['#/land', 'Land'],
+      sub: esc(p.place || ''),
+      right: `<button class="icon-btn" data-act="edit" data-id="${id}" aria-label="Edit property">${icon('edit')}</button>`,
+    })}
+    <div class="gallery">
+      ${photos.map((ph, i) => `<button class="g-photo" data-act="photo" data-id="${id}" data-i="${i}"><img src="${esc(thumb(ph))}" alt="" loading="lazy"></button>`).join('')}
+      <button class="g-add" data-act="addPhotos" data-id="${id}">${icon('camera')}<span>${photos.length ? 'Add more' : 'Add photos'}</span></button>
+    </div>
+    <div class="card pad plan-sum">
+      <div class="title-row">${hearts(p.hearts, 'hearts', id)}<span class="badge ${esc(p.status || 'looking')}">${statusName(p.status)}</span></div>
+      ${facts(p) ? `<p class="stats">${facts(p)}</p>` : ''}
+      ${p.link ? `<a class="btn small ghost" href="${esc(p.link)}" target="_blank" rel="noopener">${icon('open')} Open listing</a>` : ''}
+    </div>
+    <section class="card pad">
+      <div class="row-head"><h2>Checklist</h2><span class="muted">${yes} of ${CHECKS.length}</span></div>
+      <p class="muted small">Tap to mark: ? not sure yet → ✓ yes → ✗ no</p>
+      <ul class="checks">${CHECKS.map(([k, text]) => {
+        const v = checks[k];
+        return `<li><button class="ck ${v || 'unk'}" data-act="check" data-id="${id}" data-k="${k}"><span class="ck-mark">${v === 'yes' ? '✓' : v === 'no' ? '✗' : '?'}</span>${esc(text)}</button></li>`;
+      }).join('')}</ul>
+    </section>
+    ${p.notes ? `<section class="card pad"><h2>Notes</h2><p class="notes">${esc(p.notes)}</p></section>` : ''}`;
+  }
+
+  // ---------- links ----------
+  function linkForm(l) {
+    form({
+      title: l ? 'Edit link' : 'New link',
+      fields: [
+        { name: 'name', label: 'Name', value: l?.name, placeholder: 'Space Planner', required: true, autofocus: !l },
+        { name: 'url', label: 'Web address', type: 'url', value: l?.url, placeholder: 'app.spaceplanner.co', required: true },
+        { name: 'category', label: 'Type', type: 'select', value: l?.category || LINK_CATEGORIES[0], options: LINK_CATEGORIES.map(c => [c, c]) },
+        { name: 'note', label: 'Note', value: l?.note, placeholder: 'What it’s good for' },
+      ],
+      save: async v => {
+        if (!domain(v.url)) throw new Error('That web address doesn’t look right.');
+        if (l) return DB.update(l.id, v);
+        await DB.add({ kind: 'link', ...v });
+      },
+      remove: l && (async () => {
+        if (!(await ask(`Delete “${l.name}”?`))) return false;
+        await DB.remove(l);
+        return true;
+      }),
+    });
+  }
+
+  // A soft letter tile, colored by name, instead of fetching each site's logo.
+  const TINTS = ['var(--sage)', 'var(--wood)', 'var(--sage-deep)', 'var(--taupe)', 'var(--clay)'];
+  const tint = s => TINTS[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % TINTS.length];
+
+  Views.links = {
+    nav: 'links',
+    render() {
+      const all = kind('link').sort((a, b) => a.t - b.t);
+      const cats = [...LINK_CATEGORIES, ...new Set(all.map(l => l.category).filter(c => !LINK_CATEGORIES.includes(c)))];
+      return `${pageTop('Design links', { sub: 'Tools for mocking up plans in 3D, and other helpful sites', right: `<button class="btn small" data-act="add">${icon('plus')} Link</button>` })}
+      ${all.length ? cats.map(c => {
+        const list = all.filter(l => (l.category || 'Other') === c);
+        return list.length ? `<section><h2 class="cat-h">${esc(c)}</h2><div class="grid links">${list.map(l => `<div class="link-card">
+            <a href="${esc(l.url)}" target="_blank" rel="noopener" class="link-main">
+              <span class="mono" style="background:${tint(l.name)}">${esc(l.name.trim()[0] || '?').toUpperCase()}</span>
+              <span class="link-txt"><b>${esc(l.name)}</b><small>${esc(domain(l.url))}</small>${l.note ? `<span>${esc(l.note)}</span>` : ''}</span>
+              ${icon('open', 'dim')}
+            </a>
+            <button class="icon-btn" data-act="edit" data-id="${l.id}" aria-label="Edit ${esc(l.name)}">${icon('edit')}</button>
+          </div>`).join('')}</div></section>` : '';
+      }).join('') : empty('links', 'No links yet', 'Save websites for mocking up floor plans in 3D, finding land and inspiration.', `<button class="btn" data-act="add">${icon('plus')} Add a link</button>`)}`;
+    },
+    acts: {
+      add: () => linkForm(null),
+      edit: el => linkForm(get(el.dataset.id)),
+    },
+  };
+
+  return { form: landForm };
+})();
