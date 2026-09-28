@@ -7,11 +7,11 @@
      so boards load fast and work with no signal. Cleared on sign-out.
    - Everything else (database, login) goes straight to the network.
      Firestore keeps its own offline copy of your data. */
-const APP_CACHE = 'home-app-v2';
+const APP_CACHE = 'home-app-v3';
 const PHOTO_CACHE = 'home-photos-v1';
 const APP_FILES = [
   './', 'index.html', 'styles.css', 'firebase-config.js', 'photos.js', 'store.js', 'demo.js', 'ui.js', 'size.js',
-  'app.js', 'rooms.js', 'plans.js', 'money.js', 'land.js', 'listing.js', 'main.js', 'manifest.json', 'icon-192.png', 'apple-touch-icon.png',
+  'app.js', 'rooms.js', 'plans.js', 'money.js', 'land.js', 'listing.js', 'settings.js', 'look.js', 'main.js', 'manifest.json', 'icon-192.png', 'apple-touch-icon.png',
 ];
 const SDK = ['app', 'auth', 'firestore', 'storage', 'functions']
   .map(name => `https://www.gstatic.com/firebasejs/10.14.1/firebase-${name}-compat.js`);

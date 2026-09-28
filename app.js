@@ -174,14 +174,7 @@ Views.home = {
       <div class="tile-txt"><h3>${esc(title)}</h3><p>${sub}</p></div></a>`;
 
     return `
-    <section class="hero${st.heroPhoto ? ' has-photo' : ''}">
-      ${st.heroPhoto ? `<img class="hero-img" src="${esc(st.heroPhoto.url)}" alt="">` : `<div class="hero-art">${heroArt()}</div>`}
-      <div class="hero-txt">
-        <h1>The Brown Family Home</h1>
-        ${st.subtitle ? `<p>${esc(st.subtitle)}</p>` : ''}
-      </div>
-      <a class="icon-btn hero-gear" href="#/settings" aria-label="Settings">${icon('gear')}</a>
-    </section>
+    ${heroHtml(st)}
 
     <a class="card save-card" href="#/money">
       <div class="save-house">${houseSvg(pct)}</div>
@@ -218,6 +211,23 @@ Views.home = {
   },
 };
 
+// The top of the home page: your photo (placed the way you set it in
+// Settings → Adjust photo) or the farmhouse drawing. Also used by the adjuster.
+function heroHtml(st, editing) {
+  const h = { x: 50, y: 50, zoom: 1, dark: 0.3, pos: 'bottom', ...(st.hero || {}) };
+  const photo = st.heroPhoto;
+  return `<section class="hero${photo ? ` has-photo pos-${esc(h.pos)}` : ''}" style="--dark:${+h.dark}">
+    ${photo ? `<img class="hero-img" src="${esc(photo.url)}" alt="" draggable="false" style="${heroImgStyle(h)}">` : `<div class="hero-art">${heroArt()}</div>`}
+    <div class="hero-txt">
+      <h1>The Brown Family Home</h1>
+      ${st.subtitle ? `<p>${esc(st.subtitle)}</p>` : ''}
+    </div>
+    ${editing ? '' : `<a class="icon-btn hero-gear" href="#/settings" aria-label="Settings">${icon('gear')}</a>`}
+  </section>`;
+}
+// The photo point at x%,y% stays in place at any screen size, and zoom grows around it.
+const heroImgStyle = h => `object-position:${+h.x}% ${+h.y}%;transform:scale(${+h.zoom});transform-origin:${+h.x}% ${+h.y}%`;
+
 // A soft hillside farmhouse for the top of the home page (until you pick a photo).
 function heroArt() {
   return `<svg viewBox="0 0 400 190" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
@@ -238,46 +248,6 @@ function heroArt() {
     <path d="M118 140v14M284 142v12" stroke="var(--wood-deep)" stroke-width="2"/>
   </svg>`;
 }
-
-// ---------- settings ----------
-Views.settings = {
-  nav: 'home',
-  render() {
-    const st = settings(), me = get(S.uid) || {};
-    return `${pageTop('Settings', { back: ['#/', 'Home'] })}
-    <div class="card pad stack">
-      <div class="set-row"><div><p class="lbl">Your name</p><p>${esc(me.name || 'Not set')}</p></div><button class="btn small ghost" data-act="name">Change</button></div>
-      <div class="set-row"><div><p class="lbl">Line under “The Brown Family Home”</p><p>${esc(st.subtitle || 'None')}</p></div><button class="btn small ghost" data-act="subtitle">Change</button></div>
-      <div class="set-row"><div><p class="lbl">Home page photo</p><p>${st.heroPhoto ? 'Your photo' : 'Farmhouse drawing'}</p></div><button class="btn small ghost" data-act="hero">Change</button></div>
-      <div class="set-row"><div><p class="lbl">Build cost per sq ft</p><p>${st.costPerSqft ? `${money(st.costPerSqft)} (for rough plan estimates)` : 'Not set'}</p></div><button class="btn small ghost" data-act="goal">Change</button></div>
-    </div>
-    <div class="card pad stack">
-      <p class="muted">${DB.demo ? 'Sample mode: nothing is saved.' : `Signed in as ${esc(me.email || '')}`}</p>
-      <button class="btn ghost" data-act="signout">${DB.demo ? 'Leave sample mode' : 'Sign out'}</button>
-    </div>`;
-  },
-  acts: {
-    name: () => askName(),
-    subtitle() {
-      form({
-        title: 'Home page line', fields: [{ name: 'subtitle', label: 'Shown under the title (leave blank for none)', value: settings().subtitle || '', placeholder: 'our homestead, someday' }],
-        save: v => saveSettings({ subtitle: v.subtitle }),
-      });
-    },
-    hero() {
-      form({
-        title: 'Home page photo', intro: 'Pick a photo for the top of the home page, or remove it to go back to the farmhouse drawing.',
-        fields: [{ name: 'heroPhoto', label: 'Photo', type: 'photo', value: settings().heroPhoto || null }],
-        save: v => saveSettings({ heroPhoto: v.heroPhoto }),
-      });
-    },
-    goal: () => Money.editGoal(),
-    async signout() {
-      if (!DB.demo && !(await ask('You’ll need your email and password to sign back in.', { ok: 'Sign out', danger: false, title: 'Sign out?' }))) return;
-      await DB.signOut();
-    },
-  },
-};
 
 function askName(first) {
   const me = get(S.uid) || {};
@@ -347,6 +317,7 @@ function start(store) {
     unwatch = DB.watch((all, fromCache) => {
       S.all = all;
       S.ready = true;
+      Look.sync(get(S.uid));
       if (!setUp && !fromCache) {
         setUp = true;
         seed().then(() => { if (!personName(S.uid)) askName(true); }).catch(console.error);
