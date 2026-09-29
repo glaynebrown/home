@@ -748,3 +748,4 @@ a.now-room { text-decoration: none; color: inherit; }
 .bar-line { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .bar-line .bar { flex: 1; margin-top: 0; }
 .bar-pct { font-weight: 800; color: var(--sage-deep); font-size: .95rem; min-width: 2.6em; text-align: right; }
+.basis { font-size: .84rem; font-style: italic; color: var(--muted); margin-top: -2px; }

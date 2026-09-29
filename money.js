@@ -69,6 +69,7 @@ const Money = (() => {
       <section class="card pad b-sum savings-goal">
         <p class="eyebrow">${esc(g.label)}</p>
         ${goal ? `<p class="saved-of"><span class="big">${money(saved)}</span><span class="of"> / ${money(goal)}</span></p>
+          ${g.basis ? `<p class="basis">${esc(g.basis)}</p>` : ''}
           ${Budget.goalBar(saved, g, true)}
           ${pct >= 1 ? '<p class="pct">Goal reached! 🎉</p>' : ''}`
           : `<p class="big">${money(saved)}</p><p class="muted small">saved so far</p>`}

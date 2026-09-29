@@ -108,8 +108,8 @@ const Budget = (() => {
   // enough to buy the land, 'fixed' = a set amount (settings.goal).
   function goalNow() {
     const st = settings();
-    if (st.goalMode === 'budget') { const c = cash(); return { amount: c.goal, land: c.landReady, auto: true, label: 'Cash we need' }; }
-    if (st.goalMode === 'land') { const c = cash(); return { amount: c.landReady, land: null, auto: true, label: 'Cash for the land' }; }
+    if (st.goalMode === 'budget') { const c = cash(); return { amount: c.goal, land: c.landReady, auto: true, label: 'Cash we need', basis: `Based on ${c.L.down}% down` }; }
+    if (st.goalMode === 'land') { const c = cash(); return { amount: c.landReady, land: null, auto: true, label: 'Cash for the land', basis: `Based on ${c.L.landDown}% down on the land` }; }
     return { amount: st.goal || 0, land: null, auto: false, label: 'Our savings goal' };
   }
   // Progress bar with a marker for "enough to buy the land".
