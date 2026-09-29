@@ -52,6 +52,7 @@ const DemoStore = (() => {
       return { path: url, thumbPath: thumbUrl, url, thumbUrl, w: p.full.w, h: p.full.h };
     },
     dropPhotos: async () => {},
+    uploadFile: async file => ({ path: 'sample', url: URL.createObjectURL(file), type: file.type || 'application/pdf', size: file.size, fileName: file.name || '' }),
     preview: async () => { throw new Error('Reading listing links needs Firebase, so it doesn’t work in sample mode.'); },
 
     // Called once the starter boards exist, so sample mode has a little to

@@ -17,6 +17,9 @@
        kind 'link'      a website       { name, url, category, note, fav }
        kind 'budget'    (id 'budget')   build budget, see budget.js
        kind 'addition'  a section to build later, see additions.js
+       kind 'step'      steps & timeline, see steps.js
+       kind 'builder', 'question'   builders & quotes, see builders.js
+       kind 'doc'       documents (a photo, or a PDF under docs/), see docs.js
        (a board with .addition is a future room in that addition)
 
    A photo is { path, thumbPath, url, thumbUrl, w, h }; files live in Storage
@@ -24,7 +27,7 @@
    can run in "sample mode" instead (demo.js): same functions, in memory. */
 
 // Every photo a thing holds, so deleting it can clean up Storage too.
-const photosOf = x => [x.photo, x.nowPhoto, x.laterPhoto, x.heroPhoto, ...(x.photos || [])].filter(Boolean);
+const photosOf = x => [x.photo, x.nowPhoto, x.laterPhoto, x.heroPhoto, x.file, ...(x.photos || [])].filter(Boolean);
 
 const Store = (() => {
   const configured = typeof firebaseConfig !== 'undefined' && !/PASTE/.test(firebaseConfig.apiKey);
@@ -121,6 +124,15 @@ const Store = (() => {
       } catch (e) {
         throw new Error(e.code === 'functions/internal' || !e.message ? 'Couldn’t read that listing.' : e.message);
       }
+    },
+    // A PDF (or other document) as-is, under docs/. -> { path, url, type, size, fileName }
+    async uploadFile(file) {
+      needOnline('Uploading documents');
+      const ext = (file.name || '').split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf';
+      const path = `docs/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const ref = storage.ref(path);
+      await ref.put(file, { contentType: file.type || 'application/pdf', cacheControl: 'private, max-age=31536000' });
+      return { path, url: await ref.getDownloadURL(), type: file.type || 'application/pdf', size: file.size, fileName: file.name || '' };
     },
     dropPhotos: list => Promise.all(list.flatMap(p => [removeFile(p.path), removeFile(p.thumbPath)])).catch(console.error),
   };

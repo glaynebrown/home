@@ -186,17 +186,12 @@ Views.home = {
   render() {
     const st = settings();
     const pins = kind('pin').sort(newest);
-    const plans = kind('plan');
-    const land = kind('land');
-    const links = kind('link');
     const ups = kind('upgrade');
     const g = Budget.goalNow();
     const saved = savedTotal(), goal = g.amount;
     const pct = goal ? saved / goal : 0;
     const loved = pins.filter(p => p.fav);
     const strip = (loved.length >= 4 ? loved : pins).slice(0, 14);
-    const topPlan = [...plans].sort((a, b) => (b.hearts || 0) - (a.hearts || 0) || newest(a, b))[0];
-    const firstPhoto = list => (list.find(x => (x.photos || []).length) || {}).photos?.[0];
     const upPhoto = (ups.find(u => u.laterPhoto) || {}).laterPhoto;
 
     const tile = (href, iconName, title, sub, photo) => `<a class="tile" href="${href}">${cover(photo, iconName)}
@@ -216,16 +211,17 @@ Views.home = {
       </div>
     </a>
 
-    <div class="tiles">
-      ${tile('#/rooms', 'rooms', 'Room boards', `${kind('board').length} rooms · ${pins.length} photo${pins.length === 1 ? '' : 's'}`, pins[0] && pins[0].photo)}
-      ${tile('#/plans', 'plans', 'Floor plans', topPlan ? `${plans.length} saved · favorite: ${esc(topPlan.name)}` : 'Add plans from the book', firstPhoto([...plans].sort((a, b) => (b.hearts || 0) - (a.hearts || 0))))}
+    ${Steps.card()}
+
+    <div class="tiles two-up">
       ${tile('#/size', 'ruler', 'Size check', 'How big does it feel?', null)}
       ${tile('#/upgrades', 'money', 'Upgrades', ups.length ? `${ups.filter(u => !u.done).length} on the wishlist` : 'Now vs. someday', upPhoto)}
-      ${tile('#/land', 'land', 'Land', land.length ? `${land.length} propert${land.length === 1 ? 'y' : 'ies'}` : 'Properties you’re watching', firstPhoto(land))}
-      ${tile('#/links', 'links', 'Design links', `${links.length} saved`, null)}
     </div>
 
-    ${notesCard()}
+    <div class="tiles two-up half-cards">
+      ${Builders.card()}
+      ${Docs.card()}
+    </div>
 
     ${strip.length ? `<section class="strip-wrap">
       <div class="row-head"><h2>${loved.length >= 4 ? 'Loved ideas' : 'Newest ideas'}</h2><a href="#/rooms">All boards</a></div>
@@ -241,18 +237,6 @@ Views.home = {
     },
   },
 };
-
-// Every room's notes at a glance; tap one to open that board.
-function notesCard() {
-  const has = b => Rooms.notesOf(b, 'starter') || Rooms.notesOf(b, 'upgrade');
-  const rooms = [...Rooms.mainBoards(), ...Additions.list().flatMap(a => Rooms.futureBoards(a.id))].filter(has);
-  const part = (b, s) => Rooms.notesOf(b, s) ? `<span class="side-note"><i>${b.addition ? `Future · ${esc((get(b.addition) || {}).name || '')}` : Rooms.SIDES[s]}</i>${esc(Rooms.notesOf(b, s))}</span>` : '';
-  return `<section class="card pad room-notes">
-    <div class="row-head"><h2>${icon('note')} Room notes</h2><a href="#/rooms">All rooms</a></div>
-    ${rooms.length ? `<ul>${rooms.map(b => `<li><a href="#/rooms/${b.id}"><b>${esc(b.name)}</b>${part(b, 'starter')}${part(b, 'upgrade')}</a></li>`).join('')}</ul>`
-      : '<p class="muted">Open any room board and tap <b>Add notes</b>. Everything you write shows up here.</p>'}
-  </section>`;
-}
 
 // The top of the home page: your photo (placed the way you set it in
 // Settings → Adjust photo) or the farmhouse drawing. Also used by the adjuster.
@@ -363,7 +347,7 @@ function start(store) {
       Look.sync(get(S.uid));
       if (!setUp && !fromCache) {
         setUp = true;
-        seed().then(moveAdditions).then(foldPantry).then(() => { if (!personName(S.uid)) askName(true); }).catch(console.error);
+        seed().then(moveAdditions).then(foldPantry).then(() => Steps.seed()).then(() => Builders.seed()).then(() => { if (!personName(S.uid)) askName(true); }).catch(console.error);
       }
       refresh();
     }, err => {
