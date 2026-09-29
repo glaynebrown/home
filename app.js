@@ -231,8 +231,7 @@ Views.home = {
 
     return `
     ${heroHtml(st)}
-    <div class="home-grid">${order.map(k => `<div class="hb ${blocks[k][0]}" data-sort="${k}">${blocks[k][1]}</div>`).join('')}</div>
-    <p class="muted small center-note">Press and hold a card to move it.</p>`;
+    <div class="home-grid">${order.map(k => `<div class="hb ${blocks[k][0]}" data-sort="${k}">${blocks[k][1]}</div>`).join('')}</div>`;
   },
   // Hold and drag to rearrange (saved for this person only).
   after(root) {

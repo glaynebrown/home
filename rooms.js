@@ -293,7 +293,7 @@ const Rooms = (() => {
       ${future.map(([a, bs]) => `<section class="future-group">
         <div class="row-head"><h2>Future rooms: ${esc(a.name)}</h2><a href="#/additions/${a.id}">The addition</a></div>
         <div class="grid boards" data-group="${a.id}">${bs.map(card).join('')}</div></section>`).join('')}
-      ${list.length > 1 ? '<p class="muted small center-note">Press and hold a room to drag it to a new spot.</p>' : ''}`;
+`;
     },
     // Long notes fold to a few lines with Show more.
     after(root) {
@@ -454,7 +454,7 @@ const Rooms = (() => {
         ${p.topic ? `<span class="pin-tag">${esc(p.topicLabel || p.topic)}</span>` : ''}
         ${p.caption ? `<figcaption>${esc(p.caption)}</figcaption>` : ''}
       </figure>`).join('')}</div>
-      ${pins.length > 1 && !lovedOnly ? '<p class="muted small center-note">Press and hold a photo to drag it to a new spot.</p>' : ''}`
+`
       : lovedOnly ? empty('heart', 'No loved photos', 'Tap the heart on a photo to love it.')
         : add ? empty('camera', 'No photos yet', 'Add ideas for this room: screenshots from Pinterest, Instagram, anything you love.')
         : side === 'starter' ? empty('camera', 'No starter photos yet', 'Add what you’ll build with first: builder-grade finishes, model home photos, the basic version.')

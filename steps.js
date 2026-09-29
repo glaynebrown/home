@@ -77,7 +77,7 @@ const Steps = (() => {
             ${when(s) || s.note ? `<small>${[when(s), s.note && esc(s.note)].filter(Boolean).join(' · ')}</small>` : ''}
           </button>
         </li>`).join('')}</ol>
-      <p class="muted small center-note">Tap the circle to check a step off. Press and hold a step to move it.</p>`
+      <p class="muted small center-note">Tap the circle to check a step off.</p>`
         : empty('plans', 'No steps yet', 'Add the steps between now and move-in day.', `<button class="btn" data-act="add">${icon('plus')} Add a step</button>`)}`;
     },
     after(root) {
