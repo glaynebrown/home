@@ -717,3 +717,19 @@ a.now-room { text-decoration: none; color: inherit; }
 .hb > * { flex: 1; min-width: 0; }
 .hb.sort-placeholder { opacity: .3; }
 .sort-ghost.hb > * { height: 100%; }
+
+/* Plans: what we're looking for */
+.wish-card { display: flex; flex-direction: column; gap: 10px; }
+.wish-card .row-head { margin-bottom: 0; }
+.wish-card h2 { display: flex; align-items: center; gap: 8px; }
+.wish-card h2 .ic { color: var(--sage-deep); }
+.wish-cols { display: grid; gap: 12px; }
+@media (min-width: 560px) { .wish-cols { grid-template-columns: repeat(3, 1fr); } }
+.wish-col h3 { font-size: calc(1.05rem * var(--ts)); margin-bottom: 4px; }
+.wish-col ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.wish-col.must h3 { color: var(--sage-deep); }
+.wish-col.love h3 { color: var(--clay); }
+.wish-col.nope h3 { color: var(--muted); }
+.wish-col.nope li { color: var(--muted); }
+.wish-pick { display: flex; flex-direction: column; gap: 8px; }
+.wish-ideas .focus-chips { margin-top: 8px; }

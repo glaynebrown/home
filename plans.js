@@ -97,6 +97,35 @@ const Plans = (() => {
     });
   }
 
+  // "What we're looking for": shared lists for every plan (settings.planWish =
+  // { must, love, nope, notes }, one item per line), with one-tap suggestions.
+  const WISH = [['must', 'Must-haves'], ['love', 'Love'], ['nope', 'Not for us']];
+  const WISH_IDEAS = ['One story', 'Two story', 'Split bedrooms', 'Open concept', 'Mudroom', 'Walk-in pantry', 'Home office',
+    'Covered porch', 'Wraparound porch', 'Attached garage', 'Basement', 'Bonus room', 'Laundry near bedrooms', 'Kitchen island',
+    'Vaulted ceilings', 'Walk-in closet', 'Guest suite', 'Room to add on later'];
+  const wish = () => ({ must: '', love: '', nope: '', notes: '', ...(settings().planWish || {}) });
+  const wishItems = w => Object.fromEntries(WISH.map(([k]) => [k, lines(w[k])]));
+  const saveWish = patch => saveSettings({ planWish: { ...wish(), ...patch } });
+  let ideasOpen = false;
+  document.addEventListener('toggle', e => { if (e.target.classList && e.target.classList.contains('wish-ideas')) ideasOpen = e.target.open; }, true);
+
+  function wishCard() {
+    const w = wish(), items = wishItems(w);
+    const has = WISH.some(([k]) => items[k].length) || w.notes.trim();
+    const all = WISH.flatMap(([k]) => items[k].map(x => x.toLowerCase()));
+    const ideas = WISH_IDEAS.filter(x => !all.includes(x.toLowerCase()));
+    return `<section class="card pad wish-card">
+      <div class="row-head"><h2>${icon('note')} What we’re looking for</h2><button class="btn small ghost" data-act="wishEdit">${has ? 'Edit' : 'Add'}</button></div>
+      ${has ? `<div class="wish-cols">${WISH.map(([k, label]) => items[k].length ? `<div class="wish-col ${k}"><h3>${label}</h3>
+          <ul>${items[k].map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '').join('')}</div>
+        ${w.notes.trim() ? `<p class="notes">${esc(w.notes.trim())}</p>` : ''}`
+        : '<p class="muted">Plan types and features you like, must have, or don’t want. It’s shared, and it helps when flipping through the plan book.</p>'}
+      ${ideas.length ? `<details class="cust wish-ideas"${ideasOpen ? ' open' : ''}><summary>Ideas to add (${ideas.length})</summary>
+        <p class="muted small">Tap one to add it to a list.</p>
+        <div class="focus-chips">${ideas.map(x => `<button class="chip" data-act="wishIdea" data-x="${esc(x)}">+ ${esc(x)}</button>`).join('')}</div></details>` : ''}
+    </section>`;
+  }
+
   Views.plans = {
     nav: 'plans',
     render([id]) {
@@ -104,6 +133,7 @@ const Plans = (() => {
       const list = sorted();
       return `${pageTop('Floor plans', { link: linkBtn('Floor plans & 3D'), sub: 'From the plan book and beyond', right: `<button class="btn small" data-act="add">${icon('plus')} Plan</button>` })}
       ${tabs(TABS, '#/plans')}
+      ${wishCard()}
       ${list.length ? `<div class="grid plans">${list.map(p => {
         const est = estimate(p);
         return `<a class="plan-card" href="#/plans/${p.id}">${cover((p.photos || [])[0], 'plans')}
@@ -114,6 +144,33 @@ const Plans = (() => {
     },
     acts: {
       add: () => planForm(null),
+      wishEdit() {
+        const w = wish();
+        form({
+          title: 'What we’re looking for',
+          intro: '<p>One per line.</p>',
+          fields: [
+            { name: 'must', label: 'Must-haves', type: 'textarea', value: w.must, placeholder: 'Mudroom\nWalk-in pantry' },
+            { name: 'love', label: 'Love', type: 'textarea', value: w.love, placeholder: 'Split bedrooms\nCovered back porch' },
+            { name: 'nope', label: 'Not for us', type: 'textarea', value: w.nope, placeholder: 'Bedrooms upstairs' },
+            { name: 'notes', label: 'Notes', type: 'textarea', value: w.notes, placeholder: 'Anything else about the kind of plan we want' },
+          ],
+          save: v => saveWish(v),
+        });
+      },
+      wishIdea(el) {
+        const x = el.dataset.x;
+        const s = sheet(x, `<p class="intro">Add “${esc(x)}” to…</p>
+          <div class="wish-pick">${WISH.map(([k, label]) => `<button type="button" class="btn ${k === 'nope' ? 'ghost' : ''}" data-k="${k}">${label}</button>`).join('')}</div>`, { cls: 'small' });
+        s.el.addEventListener('click', async e => {
+          const b = e.target.closest('[data-k]');
+          if (!b) return;
+          const w = wish(), k = b.dataset.k;
+          await saveWish({ [k]: [...lines(w[k]), x].join('\n') });
+          s.close();
+          toast(`Added to ${WISH.find(y => y[0] === k)[1]}`);
+        });
+      },
       edit: el => planForm(get(el.dataset.id)),
       rooms: el => roomsForm(get(el.dataset.id)),
       async hearts(el) {
