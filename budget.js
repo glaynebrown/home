@@ -2,7 +2,7 @@
    #/budget
 
    Shared, in one thing (id 'budget'):
-     { landId | landPrice, planId | sqft, cushion (%), markup (%, used by additions),
+     { landId | landPrice, planPick ('auto' = our favorite plan, 'manual' = sqft, or a plan id), sqft, cushion (%), markup (%, used by additions),
        site: [{ key, name, amount, quote, note, custom }] }
    Additions live on Plans → Additions (additions.js); only their total shows here.
 
@@ -68,16 +68,23 @@ const Budget = (() => {
     const land = Math.round(landFull * L.split / 100);
     const lines = siteLines();
     const site = lines.reduce((s, l) => s + (l.amount || 0), 0);
-    const plan = d.planId && get(d.planId);
+    // Which plan: our favorite (the most hearts) unless one is picked.
+    const pick = d.planPick || (d.planId ? d.planId : d.sqft ? 'manual' : 'auto');
+    const favorite = Plans.sorted().find(p => p.sqft) || Plans.sorted()[0] || null;
+    const plan = pick === 'auto' ? favorite : pick === 'manual' ? null : get(pick) || favorite;
     const sqft = plan ? plan.sqft || 0 : d.sqft || 0;
     const house = sqft * cps();
+    // Special starter items: extra costs added on a room's Starter side.
+    const extrasList = Rooms.starterExtras();
+    const extras = extrasList.reduce((s, x) => s + x.amount, 0);
+    const build = house + extras;
     const cushionPct = d.cushion ?? 10;
-    const cushion = Math.round((site + house) * cushionPct / 100);
+    const cushion = Math.round((site + build) * cushionPct / 100);
     const additions = Additions.total();
     const upgrades = kind('upgrade').filter(u => !u.done).reduce((s, u) => s + (u.cost || 0), 0);
     return {
-      d, L, landItem, landFull, land, lines, site, plan, sqft, house, cushionPct, cushion, additions, upgrades,
-      moveIn: land + site + house + cushion,
+      d, L, landItem, landFull, land, lines, site, pick, favorite, plan, sqft, house, extrasList, extras, build, cushionPct, cushion, additions, upgrades,
+      moveIn: land + site + build + cushion,
       quotes: lines.filter(l => l.amount != null && l.quote).length, filled: lines.filter(l => l.amount != null).length,
     };
   }
@@ -85,7 +92,7 @@ const Budget = (() => {
   // The cash to have saved before the loan.
   function cash() {
     const t = totals(), L = t.L;
-    const financed = t.land + t.site + t.house;
+    const financed = t.land + t.site + t.build;
     const down = Math.round(financed * L.down / 100);
     const landClosing = Math.round(t.land * L.landClosing / 100);
     const loanAmount = financed - down;
@@ -131,6 +138,7 @@ const Budget = (() => {
           <li><span>Land (our share)</span><b>${money(t.land)}</b></li>
           <li><span>Site work</span><b>${money(t.site)}</b></li>
           <li><span>Starter house</span><b>${money(t.house)}</b></li>
+          ${t.extras ? `<li><span>Special starter items</span><b>${money(t.extras)}</b></li>` : ''}
           <li><span>Cushion (${t.cushionPct}%)</span><b>${money(t.cushion)}</b></li>
         </ul>
         <p class="muted small">Saved so far: ${money(saved)}${st.goal ? ` · your goal: ${money(st.goal)}` : ''}</p>
@@ -159,10 +167,14 @@ const Budget = (() => {
 
       <section class="card pad">
         <div class="row-head"><h2>Starter house</h2></div>
-        ${row(t.plan ? esc(t.plan.name) : t.d.sqft ? 'Square feet' : 'Pick a floor plan', t.sqft ? `${commas(t.sqft)} sq ft` : dash, 'house',
-          t.plan ? (t.plan.sqft ? `${[t.plan.beds && `${t.plan.beds} bed`, t.plan.baths && `${t.plan.baths} bath`].filter(Boolean).join(' · ')}` : 'This plan has no square feet yet. Add it on the plan.') : 'From your Plans page, or type the square feet')}
+        ${row(t.plan ? esc(t.plan.name) : t.pick === 'manual' ? 'Square feet' : 'Add a floor plan', t.sqft ? `${commas(t.sqft)} sq ft` : dash, 'house',
+          [t.pick === 'auto' && t.plan ? 'Our favorite plan (follows the hearts)' : '',
+            t.plan ? (t.plan.sqft ? [t.plan.beds && `${t.plan.beds} bed`, t.plan.baths && `${t.plan.baths} bath`].filter(Boolean).join(' · ') : 'This plan has no square feet yet. Add it on the plan.') : t.pick === 'manual' ? 'Typed in' : 'Add plans on the Plans page'].filter(Boolean).join(' · '))}
         ${row('Cost per sq ft', cps() ? money(cps()) : dash, 'cps', 'From builder quotes in Louisa County. Builder-grade finishes are usually included.')}
         <p class="b-math">${t.sqft && cps() ? `${commas(t.sqft)} sq ft × ${money(cps())} = <b>${money(t.house)}</b>` : 'Add the square feet and cost per sq ft to see the starter house cost.'}</p>
+        ${row('Special starter items', t.extras ? money(t.extras) : dash, 'extras',
+          t.extrasList.length ? t.extrasList.slice(0, 3).map(x => `${esc(x.label)} (${esc(x.board.name)}) +${money(x.amount)}`).join(' · ') + (t.extrasList.length > 3 ? ` · +${t.extrasList.length - 3} more` : '')
+            : 'Something fancier than builder-grade? Add an extra cost from a room’s Starter side.')}
         ${roomsSqft ? `<p class="muted small">The rooms listed on this plan add up to ${commas(Math.round(roomsSqft))} sq ft. Halls, closets, stairs and walls make up the rest, so the plan’s total is the one to use.</p>` : ''}
       </section>
 
@@ -221,11 +233,22 @@ const Budget = (() => {
         form({
           title: 'Starter house',
           fields: [
-            { name: 'planId', label: 'Floor plan', type: 'select', value: t.d.planId || '', options: [['', 'Not picked yet'], ...plans.map(p => [p.id, `${p.name}${p.sqft ? ` · ${commas(p.sqft)} sq ft` : ''}`])] },
-            { name: 'sqft', label: 'Or square feet', type: 'number', value: t.d.sqft ?? '', placeholder: '1,400', hint: 'Used when no plan is picked.' },
+            { name: 'planPick', label: 'Floor plan', type: 'select', value: t.pick, options: [
+              ['auto', `Our favorite plan (follows the hearts)${t.favorite ? `: ${t.favorite.name}` : ''}`],
+              ...plans.map(p => [p.id, `${p.name}${p.sqft ? ` · ${commas(p.sqft)} sq ft` : ''}`]),
+              ['manual', 'Type the square feet instead'],
+            ] },
+            { name: 'sqft', label: 'Square feet', type: 'number', value: t.d.sqft ?? '', hint: 'Used with “Type the square feet instead.”' },
           ],
-          save: v => save({ planId: v.planId || null, sqft: v.sqft }),
+          save: v => save({ planPick: v.planPick, planId: null, sqft: v.sqft }),
         });
+      },
+      extras() {
+        const list = totals().extrasList;
+        const s = sheet('Special starter items', `<p class="intro">Anything fancier than builder-grade for the first build, like a nicer sink and faucet. Add them from a room’s <b>Starter</b> side: tap a suggestion (e.g. + Sink & faucet) and fill in <b>Extra cost for the starter build</b>.</p>
+          ${list.length ? `<div class="b-list">${list.map(x => `<a class="b-row" href="#/rooms/${x.board.id}"><span class="b-name"><span class="b-title">${esc(x.label)}</span><small>${esc(x.board.name)}</small></span><span class="b-amt">+${money(x.amount)}</span></a>`).join('')}</div>
+            <div class="b-total"><span>Total</span><b>${money(list.reduce((a, x) => a + x.amount, 0))}</b></div>` : '<p class="muted">None yet.</p>'}`);
+        s.el.addEventListener('click', e => { if (e.target.closest('a.b-row')) s.close(); });
       },
       cps() {
         form({

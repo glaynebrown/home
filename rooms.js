@@ -52,6 +52,12 @@ const Rooms = (() => {
     return { items, other };
   }
 
+  // Extra costs for the starter build, by topic: board.starterExtras =
+  // { key: { label, amount } }. They add up to "Special starter items" on the Budget.
+  const extraOf = (b, key) => ((b.starterExtras || {})[key] || {}).amount || 0;
+  const starterExtras = () => mainBoards().flatMap(b => Object.entries(b.starterExtras || {})
+    .filter(([, x]) => x && x.amount > 0).map(([key, x]) => ({ board: b, key, label: x.label || key, amount: x.amount })));
+
   // Topic photos: pins tagged with a notes topic (pin.topic = its key,
   // pin.topicLabel = how it's written), on the same side of the board.
   const topicPins = (b, s, key) => pinsIn(b.id).filter(p => p.topic === key && sideOf(p) === s);
@@ -67,12 +73,18 @@ const Rooms = (() => {
         if (seen.has(key)) return;
         seen.add(key);
         const pics = topicPins(b, s, key);
-        if (m[2].trim() || pics.length) parts.push({ topic: true, label: m[1].trim(), key, text: m[2].trim(), pics });
+        const extra = s === 'starter' ? extraOf(b, key) : 0;
+        if (m[2].trim() || pics.length || extra) parts.push({ topic: true, label: m[1].trim(), key, text: m[2].trim(), pics, extra });
       } else if (line.trim()) parts.push({ topic: false, text: line.trim() });
     });
     pinsIn(b.id).filter(p => p.topic && sideOf(p) === s && !seen.has(p.topic)).forEach(p => {
       seen.add(p.topic);
-      parts.push({ topic: true, label: p.topicLabel || p.topic, key: p.topic, text: '', pics: topicPins(b, s, p.topic) });
+      parts.push({ topic: true, label: p.topicLabel || p.topic, key: p.topic, text: '', pics: topicPins(b, s, p.topic), extra: s === 'starter' ? extraOf(b, p.topic) : 0 });
+    });
+    if (s === 'starter' && !b.addition) Object.entries(b.starterExtras || {}).forEach(([key, x]) => {
+      if (seen.has(key) || !(x && x.amount > 0)) return;
+      seen.add(key);
+      parts.push({ topic: true, label: x.label || key, key, text: '', pics: [], extra: x.amount });
     });
     return parts;
   }
@@ -104,6 +116,9 @@ const Rooms = (() => {
     const added = [];
     const sh = sheet(label, `<form class="topic-form" novalidate>
       <label class="field"><span class="lbl">Note</span><textarea name="note" rows="4">${esc(part ? part.text : '')}</textarea></label>
+      ${s === 'starter' && !b.addition ? `<label class="field"><span class="lbl">Extra cost for the starter build (optional)</span>
+        <div class="inp has-pre"><i class="pre">+$</i><input name="extra" inputmode="decimal" value="${part && part.extra ? commas(part.extra) : ''}"></div>
+        <small>For something fancier than builder-grade. It’s added to the Budget as a special starter item.</small></label>` : ''}
       <div class="field"><span class="lbl">Photos</span><div class="topic-photos"></div>
         <div class="btn-row"><button type="button" class="btn small ghost" data-pick>${icon('camera')} Choose photos</button>
         ${navigator.clipboard && navigator.clipboard.read ? '<button type="button" class="btn small ghost" data-paste>Paste photo</button>' : ''}</div></div>
@@ -147,6 +162,13 @@ const Rooms = (() => {
       const next = withTopicLine(cur, label, value);
       return next === cur.trim() ? null : DB.update(b.id, { [noteKey_]: next, [`${noteKey_}By`]: S.uid, [`${noteKey_}At`]: Date.now() });
     };
+    // Only writes when the amount actually changed.
+    const saveExtra = amount => {
+      const before = get(b.id).starterExtras || {};
+      const cur = { ...before };
+      if (amount > 0) cur[key] = { label, amount }; else delete cur[key];
+      return JSON.stringify(cur) === JSON.stringify(before) ? null : DB.update(b.id, { starterExtras: cur });
+    };
     sh.q('form').addEventListener('submit', async e => {
       e.preventDefault();
       const btn = sh.q('[data-save]');
@@ -156,6 +178,8 @@ const Rooms = (() => {
         for (const photo of photos) await DB.add({ kind: 'pin', board: b.id, side: s, topic: key, topicLabel: label, photo, caption: '', link: '', fav: false });
         if (dropped.length) await DB.removeMany(dropped);
         await saveNote(sh.q('[name=note]').value.trim().replace(/\n+/g, ' '));
+        const ex = sh.q('[name=extra]');
+        if (ex) await saveExtra(num(ex.value));
         sh.close();
       } catch (err) {
         console.error(err);
@@ -169,6 +193,7 @@ const Rooms = (() => {
       if (!(await ask(`Delete the ${label} note${pics ? ` and its ${pics} photo${pics === 1 ? '' : 's'}` : ''}?`))) return;
       if (pics) await DB.removeMany(part.pics);
       await saveNote('');
+      if (s === 'starter') await saveExtra(null);
       sh.close();
     };
     setTimeout(() => sh.q('[name=note]').focus(), 60);
@@ -406,7 +431,7 @@ const Rooms = (() => {
     ${parts.length ? `<section class="card pad notes-card">
       <div class="row-head"><h2>${icon('note')} ${add ? 'Notes' : `${SIDES[side]} notes`}</h2><button class="btn small ghost" data-act="notes" data-id="${id}">Edit all</button></div>
       <div class="notes clamp">${parts.map(x => x.topic ? `<div class="topic-line">
-          <button class="tl-txt" data-act="topic" data-id="${id}" data-topic="${esc(x.label)}"><b>${esc(x.label)}:</b> ${x.text ? esc(x.text) : '<span class="muted">photos only</span>'}</button>
+          <button class="tl-txt" data-act="topic" data-id="${id}" data-topic="${esc(x.label)}"><b>${esc(x.label)}:</b> ${x.text ? esc(x.text) : `<span class="muted">${x.pics.length ? 'photos only' : 'extra cost'}</span>`}${x.extra ? ` <span class="badge prep">+${money(x.extra)}</span>` : ''}</button>
           ${x.pics.length ? `<span class="tl-pics">${x.pics.slice(0, 3).map(p => `<button class="tl-pic" data-act="topicPhoto" data-id="${id}" data-key="${x.key}" data-pin="${p.id}"><img src="${esc(thumb(p.photo))}" alt="${esc(x.label)} photo" loading="lazy"></button>`).join('')}${x.pics.length > 3 ? `<span class="tl-more">+${x.pics.length - 3}</span>` : ''}</span>` : ''}
         </div>` : `<p>${esc(x.text)}</p>`).join('')}</div>
       <button class="linkish more" data-act="more" hidden>Show more</button>
@@ -436,5 +461,5 @@ const Rooms = (() => {
           : empty('camera', 'No upgrade photos yet', 'Add the dream version: screenshots from Pinterest, Instagram, anything you love.')}`;
   }
 
-  return { view, boards, mainBoards, futureBoards, pinsIn, notesOf, SIDES, sideInfo, parseNotes, coverOf, topicPins };
+  return { view, boards, mainBoards, futureBoards, pinsIn, notesOf, SIDES, sideInfo, parseNotes, coverOf, topicPins, starterExtras };
 })();

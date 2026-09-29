@@ -58,8 +58,9 @@ const Money = (() => {
       const pct = goal ? saved / goal : 0;
       const list = deposits();
       const shown = showAll ? list : list.slice(0, 6);
-      const topPlan = Plans.sorted().find(p => p.sqft);
-      const est = topPlan && Plans.estimate(topPlan);
+      // Same plan and numbers as the Budget's starter house.
+      const bt = Budget.totals();
+      const est = bt.plan && bt.sqft && st.costPerSqft ? bt.build : 0;
       return `${pageTop('Savings', { back: ['#/', 'Home'], link: linkBtn('Building & money'), sub: 'Our land and build fund' })}
       ${tabs(TABS, '#/money')}
       <section class="card pad goal-card">
@@ -77,10 +78,10 @@ const Money = (() => {
         </div>
       </section>
 
-      ${est ? `<a class="card pad est-card" href="#/plans/${topPlan.id}">
+      ${est ? `<a class="card pad est-card" href="#/budget">
         <p class="eyebrow">Rough build estimate</p>
-        <p><b>${esc(topPlan.name)}</b>: ${commas(topPlan.sqft)} sq ft × ${money(st.costPerSqft)} ≈ <b>${money(est)}</b></p>
-        <p class="muted small">Your top-hearted plan. Land, well, septic and driveway are extra.</p></a>` : ''}
+        <p><b>${esc(bt.plan.name)}</b>: ${commas(bt.sqft)} sq ft × ${money(st.costPerSqft)}${bt.extras ? ` + ${money(bt.extras)} special starter items` : ''} ≈ <b>${money(est)}</b></p>
+        <p class="muted small">The same plan as your Budget${bt.pick === 'auto' ? ' (your favorite plan)' : ''}. Land and site work are separate.</p></a>` : ''}
 
       <section class="card pad">
         <div class="row-head"><h2>History</h2></div>
