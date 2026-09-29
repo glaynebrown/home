@@ -30,6 +30,7 @@ const Plans = (() => {
         { name: 'stories', label: 'Stories', type: 'number', value: p?.stories, placeholder: '1' },
         { name: 'loves', label: 'What we love (one per line)', type: 'textarea', value: p?.loves, placeholder: 'Big pantry\nMudroom by the garage' },
         { name: 'dislikes', label: 'Not so much (one per line)', type: 'textarea', value: p?.dislikes, placeholder: 'Laundry is far from the bedrooms' },
+        { name: 'notes', label: 'Notes', type: 'textarea', rows: 4, value: p?.notes, placeholder: '2 floors, attached 2-car garage, basement option' },
         { name: 'link', label: 'Link (optional)', type: 'url', value: p?.link, placeholder: 'If the plan is online too' },
       ],
       save: async v => {
@@ -179,6 +180,10 @@ const Plans = (() => {
       ${p.link ? `<a class="btn small ghost" href="${esc(p.link)}" target="_blank" rel="noopener">${icon('open')} Open plan online</a>` : ''}
     </div>
 
+    ${(p.notes || '').trim() ? `<section class="card pad plan-notes">
+      <div class="row-head"><h2>${icon('note')} Notes</h2><button class="btn small ghost" data-act="edit" data-id="${id}">Edit</button></div>
+      <p class="notes">${esc(p.notes.trim())}</p>
+    </section>` : ''}
     ${loves.length || dislikes.length ? `<div class="two">
       ${loves.length ? `<div class="card pad"><h3 class="mini-h love">What we love</h3><ul class="ticks">${loves.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       ${dislikes.length ? `<div class="card pad"><h3 class="mini-h meh">Not so much</h3><ul class="ticks meh">${dislikes.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}

@@ -691,3 +691,6 @@ a.now-room { text-decoration: none; color: inherit; }
     height: env(safe-area-inset-top); background: var(--bg);
   }
 }
+
+.plan-notes h2 { display: flex; align-items: center; gap: 8px; }
+.plan-notes h2 .ic { color: var(--sage-deep); }
