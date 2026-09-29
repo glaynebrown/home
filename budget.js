@@ -18,7 +18,7 @@
    Loan settings live in budget.loan (all adjustable).
    Cost per sq ft is the same one the floor plans use (settings.costPerSqft).
 
-   Move-in total = land + site work + starter house + cushion (on site work
+   Total project cost = land + site work + starter house + cushion (on site work
    and the house). Later = upgrades (from the Upgrades page) + additions.
    The savings goal is separate: you set it yourself. */
 const Budget = (() => {
@@ -104,16 +104,21 @@ const Budget = (() => {
   }
 
   // The goal the savings card uses: figured from the Budget, or a set amount.
+  // settings.goalMode: 'budget' = everything (cash we need), 'land' = just
+  // enough to buy the land, 'fixed' = a set amount (settings.goal).
   function goalNow() {
     const st = settings();
-    if (st.goalMode === 'budget') { const c = cash(); return { amount: c.goal, land: c.landReady, auto: true }; }
-    return { amount: st.goal || 0, land: null, auto: false };
+    if (st.goalMode === 'budget') { const c = cash(); return { amount: c.goal, land: c.landReady, auto: true, label: 'Cash we need' }; }
+    if (st.goalMode === 'land') { const c = cash(); return { amount: c.landReady, land: null, auto: true, label: 'Cash for the land' }; }
+    return { amount: st.goal || 0, land: null, auto: false, label: 'Our savings goal' };
   }
   // Progress bar with a marker for "enough to buy the land".
-  function goalBar(saved, g) {
+  // showPct puts "28%" to the right of the bar, on the same line.
+  function goalBar(saved, g, showPct) {
     const pct = g.amount ? Math.min(100, saved / g.amount * 100) : 0;
     const m = g.land && g.amount && g.land < g.amount ? g.land / g.amount * 100 : null;
-    return `<div class="bar"><i style="width:${pct.toFixed(1)}%"></i>${m != null ? `<b class="mark" style="left:${m.toFixed(1)}%"></b>` : ''}</div>
+    const bar = `<div class="bar"><i style="width:${pct.toFixed(1)}%"></i>${m != null ? `<b class="mark" style="left:${m.toFixed(1)}%"></b>` : ''}</div>`;
+    return `${showPct ? `<div class="bar-line">${bar}<span class="bar-pct">${saved >= g.amount ? '🎉' : `${Math.floor(pct)}%`}</span></div>` : bar}
       ${m != null ? `<p class="mark-note">${saved >= g.land ? '✓ Enough to buy the land' : `▲ Enough to buy the land at ${money(g.land)}`}</p>` : ''}`;
   }
 
@@ -123,7 +128,7 @@ const Budget = (() => {
   Views.budget = {
     nav: 'budget',
     render() {
-      const t = totals(), st = settings();
+      const t = totals(), st = settings(), c = cash();
       const saved = savedTotal();
       const perc = t.landItem && (t.landItem.checks || {}).perc === 'yes';
       const roomsSqft = t.plan ? (t.plan.rooms || []).reduce((s, r) => s + ((Size.parse(r.dims) || {}).area || 0), 0) : 0;
@@ -132,8 +137,9 @@ const Budget = (() => {
       ${tabs(Money.TABS, '#/budget')}
 
       <section class="card pad b-sum">
-        <p class="eyebrow">Move-in total</p>
-        <p class="big">${money(t.moveIn)}</p>
+        <p class="eyebrow">Total project cost</p>
+        <p class="big mid">${money(t.moveIn)}</p>
+        <p class="muted small">What the land and house cost in all. Most of it is covered by the loan.</p>
         <ul class="b-parts">
           <li><span>Land (our share)</span><b>${money(t.land)}</b></li>
           <li><span>Site work</span><b>${money(t.site)}</b></li>
@@ -141,7 +147,15 @@ const Budget = (() => {
           ${t.extras ? `<li><span>Special starter items</span><b>${money(t.extras)}</b></li>` : ''}
           <li><span>Cushion (${t.cushionPct}%)</span><b>${money(t.cushion)}</b></li>
         </ul>
-        <p class="muted small">Saved so far: ${money(saved)}${st.goal ? ` · your goal: ${money(st.goal)}` : ''}</p>
+        <div class="b-paid">
+          <p class="lbl">How it’s paid</p>
+          <ul class="b-parts">
+            <li><span>Construction loan (about)</span><b>${money(c.loanAmount)}</b></li>
+            <li><span>Our down payment (${c.L.down}%)</span><b>${money(c.down)}</b></li>
+            <li><span>Cushion (our cash)</span><b>${money(t.cushion)}</b></li>
+          </ul>
+          <p class="muted small">Closing costs and split costs (${money(c.landClosing + c.loanClosing + c.fees)}) are cash too, but they aren’t part of the project cost.</p>
+        </div>
         <div class="b-later">
           <a href="#/upgrades"><span>Upgrades later</span><b>${money(t.upgrades)}</b></a>
           <a href="#/additions"><span>Additions later</span><b>${money(t.additions)}</b></a>
@@ -257,6 +271,7 @@ const Budget = (() => {
           save: v => saveSettings({ costPerSqft: v.costPerSqft }),
         });
       },
+      toGoal: () => document.getElementById('b-goal').scrollIntoView({ behavior: 'smooth', block: 'start' }),
       loan(el) {
         const k = el.dataset.k, [label, type, hint] = LOAN_FIELDS[k];
         form({
@@ -265,8 +280,8 @@ const Budget = (() => {
           save: v => save({ loan: { ...(data().loan || {}), [k]: v.v ?? LOAN[k] } }),
         });
       },
-      async useGoal() {
-        await saveSettings({ goalMode: 'budget' });
+      async useGoal(el) {
+        await saveSettings({ goalMode: el.dataset.mode || 'budget' });
         toast('Your savings goal now follows the Budget');
       },
       cushion() {
@@ -281,11 +296,12 @@ const Budget = (() => {
 
   function goalHtml() {
     const c = cash(), L = c.L, t = c.t;
-    const auto = settings().goalMode === 'budget';
+    const mode = settings().goalMode;
+    const auto = mode === 'budget' || mode === 'land';
     const pctRow = (k, amount, sub) => row(`${LOAN_FIELDS[k][0]} <span class="muted">(${L[k]}%)</span>`, money(amount), `loan" data-k="${k}`, sub);
     const feeRow = k => row(LOAN_FIELDS[k][0], money(L[k] || 0), `loan" data-k="${k}`, 'Split cost · our share');
     return `<section class="card pad" id="b-goal">
-      <div class="row-head"><h2>Cash we need</h2>${auto ? '<span class="badge done">Our savings goal</span>' : ''}</div>
+      <div class="row-head"><h2>Cash we need</h2>${mode === 'budget' ? '<span class="badge done">Our savings goal</span>' : ''}</div>
       <p class="muted small">Buy the land, then start building right after. The land counts toward the down payment.</p>
       <div class="b-list">
         ${pctRow('down', c.down, `Of our land share + site work + house (${money(c.financed)})`)}
@@ -296,8 +312,8 @@ const Budget = (() => {
       </div>
       <div class="b-total"><span>Savings goal</span><b>${money(c.goal)}</b></div>
       ${row(`Enough to buy the land <span class="muted">(${L.landDown}% down)</span>`, money(c.landReady), 'loan" data-k="landDown', 'Land down payment + land closing + the split costs above. Shown as a marker on the savings bar.')}
-      ${auto ? '<p class="muted small">Your savings goal follows this total. To use a set amount instead, tap Edit goal on the Savings tab.</p>'
-        : '<button class="btn" data-act="useGoal">Use this as our savings goal</button>'}
+      ${mode === 'budget' ? '<p class="muted small">Your savings goal follows this total. You can switch it to just the land, or a set amount, with Edit goal on the Savings tab.</p>'
+        : `<div class="btn-row"><button class="btn" data-act="useGoal" data-mode="budget">Use the total as our savings goal</button>${mode !== 'land' ? '<button class="btn ghost" data-act="useGoal" data-mode="land">Use the land amount</button>' : ''}</div>`}
     </section>`;
   }
 

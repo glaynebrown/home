@@ -14,8 +14,11 @@ const Money = (() => {
     form({
       title: 'Our goal',
       fields: [
-        { name: 'goalMode', type: 'seg', value: st.goalMode === 'budget' ? 'budget' : 'fixed', options: [['budget', 'From the Budget'], ['fixed', 'A set amount']],
-          hint: `From the Budget: the down payment, cushion, closing costs and split costs (${money(Budget.cash().goal)} right now). Adjust them on the Budget tab.` },
+        { name: 'goalMode', label: 'Saving for', type: 'select', value: ['budget', 'land'].includes(st.goalMode) ? st.goalMode : 'fixed', options: [
+            ['budget', `Everything: cash we need (${money(Budget.cash().goal)})`],
+            ['land', `Just the land (${money(Budget.cash().landReady)})`],
+            ['fixed', 'A set amount'],
+          ], hint: 'The first two follow your Budget as it changes. Adjust them on the Budget tab.' },
         { name: 'goal', label: 'Set amount', type: 'money', value: st.goal ?? '', placeholder: '150,000', hint: 'Used when “A set amount” is picked.' },
         { name: 'costPerSqft', label: 'Build cost per sq ft (optional)', type: 'money', value: st.costPerSqft ?? '', placeholder: '175', hint: 'From builder quotes in your area. Used for rough estimates on each floor plan.' },
       ],
@@ -63,18 +66,15 @@ const Money = (() => {
       const est = bt.plan && bt.sqft && st.costPerSqft ? bt.build : 0;
       return `${pageTop('Savings', { back: ['#/', 'Home'], link: linkBtn('Building & money'), sub: 'Our land and build fund' })}
       ${tabs(TABS, '#/money')}
-      <section class="card pad goal-card">
-        <div class="goal-house">${houseSvg(pct)}</div>
-        <div class="goal-txt">
-          <p class="big">${money(saved)}</p>
-          ${goal ? `<p class="muted">saved of ${money(goal)}${g.auto ? ' <a href="#/budget">(from the Budget)</a>' : ''}</p>
-            ${Budget.goalBar(saved, g)}
-            <p class="pct">${pct >= 1 ? 'Goal reached! 🎉' : `${Math.floor(pct * 100)}% there`}</p>`
-            : '<p class="muted">saved so far</p>'}
-          <div class="btn-row">
-            <button class="btn" data-act="add">${icon('plus')} Add to savings</button>
-            <button class="btn ghost" data-act="goal">${goal ? 'Edit goal' : 'Set a goal'}</button>
-          </div>
+      <section class="card pad b-sum savings-goal">
+        <p class="eyebrow">${esc(g.label)}</p>
+        ${goal ? `<p class="saved-of"><span class="big">${money(saved)}</span><span class="of"> / ${money(goal)}</span></p>
+          ${Budget.goalBar(saved, g, true)}
+          ${pct >= 1 ? '<p class="pct">Goal reached! 🎉</p>' : ''}`
+          : `<p class="big">${money(saved)}</p><p class="muted small">saved so far</p>`}
+        <div class="btn-row">
+          <button class="btn" data-act="add">${icon('plus')} Add to savings</button>
+          <button class="btn ghost" data-act="goal">${goal ? 'Edit goal' : 'Set a goal'}</button>
         </div>
       </section>
 

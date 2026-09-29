@@ -733,3 +733,18 @@ a.now-room { text-decoration: none; color: inherit; }
 .wish-col.nope li { color: var(--muted); }
 .wish-pick { display: flex; flex-direction: column; gap: 8px; }
 .wish-ideas .focus-chips { margin-top: 8px; }
+
+.b-sum .big.mid { font-size: calc(2rem * var(--ts)); }
+.b-paid { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.b-paid .b-parts { margin: 6px 0; }
+.linkish.inline { padding: 0; font-size: inherit; }
+
+.savings-goal .pct { margin-top: 4px; }
+.savings-goal .btn-row { margin-top: 14px; }
+
+/* Savings card: "$46,050 / $161,859" and the % beside the bar */
+.saved-of { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 4px; }
+.saved-of .of { font-family: var(--serif); font-size: calc(1.5rem * var(--ts)); font-weight: 600; color: var(--muted); }
+.bar-line { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.bar-line .bar { flex: 1; margin-top: 0; }
+.bar-pct { font-weight: 800; color: var(--sage-deep); font-size: .95rem; min-width: 2.6em; text-align: right; }
