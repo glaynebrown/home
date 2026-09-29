@@ -49,7 +49,7 @@ const Plans = (() => {
   // Rows of name + size; blank rows are dropped.
   function roomsForm(p) {
     const row = (r = {}) => `<div class="room-row"><input name="rn" value="${esc(r.name || '')}" placeholder="Room" aria-label="Room name">
-      <input name="rd" value="${esc(r.dims || '')}" placeholder="14 x 16" aria-label="Size" autocapitalize="off">
+      <input name="rd" value="${esc(r.dims || '')}" placeholder="Size" aria-label="Size" autocapitalize="off">
       <button type="button" class="icon-btn" data-del aria-label="Remove row">×</button></div>`;
     const s = sheet('Rooms & sizes', `<p class="intro">Copy the room sizes from the plan, the way the book writes them: <b>14x16</b>, <b>14'6" x 16'</b>, <b>14-6 x 16</b>…</p>
       <div class="rows">${(p.rooms && p.rooms.length ? p.rooms : [{}, {}, {}]).map(row).join('')}</div>
@@ -219,7 +219,7 @@ const Plans = (() => {
       ${tabs(TABS, '#/size')}
       <section class="card pad">
         <label class="field"><span class="lbl">Room size from a plan</span>
-          <input id="check" value="${esc(lastCheck)}" placeholder="14'6&quot; x 16'" autocapitalize="off" autocomplete="off"></label>
+          <input id="check" value="${esc(lastCheck)}" autocapitalize="off" autocomplete="off"></label>
         <div id="check-out">${checkHtml(lastCheck)}</div>
       </section>
       <section>

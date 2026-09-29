@@ -25,7 +25,7 @@ const savedTotal = () => kind('deposit').reduce((sum, d) => sum + (d.amount || 0
 
 // ---------- starter content (made once, by whoever signs in first) ----------
 const STARTER_BOARDS = ['Kitchen', 'Living room', 'Dining', 'Primary bedroom', 'Primary bath', 'Bedrooms', 'Bathrooms',
-  'Mudroom & laundry', 'Pantry', 'Front porch', 'Outside the house', 'Barn & homestead', 'Garden & yard'];
+  'Mudroom & laundry', 'Front porch', 'Outside the house', 'Barn & homestead', 'Garden & yard'];
 const LINK_CATEGORIES = ['Floor plans & 3D', 'Inspiration', 'Land', 'Building & money', 'Other'];
 const STARTER_LINKS = [
   ['Space Planner', 'https://app.spaceplanner.co', 'Floor plans & 3D', 'Mock up floor plans and see them in 3D', true],
@@ -49,6 +49,25 @@ async function seed() {
     for (const [name, url, category, note, fav = false] of STARTER_LINKS) await DB.add({ kind: 'link', name, url, category, note, fav });
   }
   if (DB.demo) await DB.addSamples();
+}
+
+// The pantry lives in the kitchen (Kitchen has a Pantry suggestion), so the
+// old starter Pantry board goes away once. Its photos move to Kitchen (same
+// side) and any notes are added to Kitchen's as a "Pantry:" line.
+async function foldPantry() {
+  if (settings().pantryFolded) return;
+  await saveSettings({ pantryFolded: true });
+  const named = n => kind('board').find(b => !b.addition && b.name.trim().toLowerCase() === n);
+  const pantry = named('pantry'), kitchen = named('kitchen');
+  if (!pantry || !kitchen) return;
+  for (const p of kind('pin').filter(p => p.board === pantry.id)) await DB.update(p.id, { board: kitchen.id });
+  const patch = {};
+  for (const key of ['starterNotes', 'notes']) {
+    const extra = (pantry[key] || '').trim();
+    if (extra) patch[key] = `${(kitchen[key] || '').trim()}${kitchen[key] ? '\n' : ''}Pantry: ${extra.replace(/\n+/g, ' · ')}`;
+  }
+  if (Object.keys(patch).length) await DB.update(kitchen.id, patch);
+  await DB.remove(pantry);
 }
 
 // Additions used to be kept on the Budget; now each is its own thing.
@@ -343,7 +362,7 @@ function start(store) {
       Look.sync(get(S.uid));
       if (!setUp && !fromCache) {
         setUp = true;
-        seed().then(moveAdditions).then(() => { if (!personName(S.uid)) askName(true); }).catch(console.error);
+        seed().then(moveAdditions).then(foldPantry).then(() => { if (!personName(S.uid)) askName(true); }).catch(console.error);
       }
       refresh();
     }, err => {

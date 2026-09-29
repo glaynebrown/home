@@ -171,11 +171,13 @@ function fieldHtml(f) {
         <button type="button" class="btn small ghost" data-clear${v ? '' : ' hidden'}>Remove</button></div></div>${hint}</div>`;
     default: {
       const numeric = f.type === 'money' || f.type === 'number';
+      // No example values in number, money or size boxes (they read like real amounts).
+      const ph = numeric || f.name === 'dims' ? '' : f.placeholder || '';
       const shown = f.type === 'money' && v !== '' && v != null ? commas(v) : v;
       const type = f.type === 'date' ? 'date' : 'text';
       const mode = numeric ? ' inputmode="decimal"' : f.type === 'url' ? ' inputmode="url" autocapitalize="off" autocorrect="off"' : '';
       return `<label class="field">${label}<div class="inp${f.type === 'money' ? ' has-pre' : ''}">${f.type === 'money' ? '<i class="pre">$</i>' : ''}
-        <input type="${type}" name="${f.name}" value="${esc(shown)}" placeholder="${esc(f.placeholder || '')}"${mode}${f.required ? ' required' : ''}${f.autofocus ? ' autofocus' : ''}></div>${hint}</label>`;
+        <input type="${type}" name="${f.name}" value="${esc(shown)}" placeholder="${esc(ph)}"${mode}${f.required ? ' required' : ''}${f.autofocus ? ' autofocus' : ''}></div>${hint}</label>`;
     }
   }
 }
