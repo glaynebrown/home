@@ -38,7 +38,7 @@ const Budget = (() => {
   // [key, label, kind, hint]
   const LOAN_FIELDS = {
     split: ['Split', 'pct', 'Your share of the land price and land closing costs'],
-    down: ['Down payment', 'pct', 'Construction loans usually need 20–25%'],
+    down: ['Down payment', 'pct', 'Varies by loan: often 5–20%. Use your lender’s number.'],
     landDown: ['Land down payment', 'pct', 'Usually 10–15% for raw land. Used for the “enough to buy the land” marker.'],
     landClosing: ['Land closing costs', 'pct', 'Usually 1–2.5% of the land price'],
     loanClosing: ['Construction loan closing costs', 'pct', 'Often 2–5% of the loan'],
