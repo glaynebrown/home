@@ -227,9 +227,11 @@ const Rooms = (() => {
     if (y == null) return 1;
     return x - y;
   });
+  // A board's thumbnail is the first photo on its Starter side (drag a photo
+  // to the front to change it). No starter photos yet: the first Upgrades photo.
   const coverOf = b => {
     const pins = pinsIn(b.id);
-    return (pins.find(p => p.id === b.cover) || pins[0] || {}).photo;
+    return ((oneSided(b) ? null : pins.find(p => sideOf(p) === 'starter')) || pins[0] || {}).photo;
   };
 
   // Full-screen photos with Love / Note / Cover / Move / Delete.
@@ -261,7 +263,6 @@ const Rooms = (() => {
             toast(`Moved to ${SIDES[to]}`);
             return 'close';
           } }]),
-          { label: 'Make cover', fn: async () => { await DB.update(p.board, { cover: p.id }); toast('Board cover set'); } },
           { label: 'Move', fn: () => new Promise(resolve => {
             form({
               title: 'Move to another board',

@@ -379,7 +379,7 @@ textarea { resize: vertical; }
 
 /* ---------- sheets ---------- */
 .sheet-wrap {
-  position: fixed; inset: 0; z-index: 50; background: rgba(45, 38, 32, .42);
+  position: fixed; inset: 0; z-index: 65; background: rgba(45, 38, 32, .42);
   display: flex; align-items: flex-end; justify-content: center; animation: fade .15s ease;
 }
 .sheet {
