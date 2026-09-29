@@ -3,7 +3,7 @@
    #/plans/{id}     one plan: photos of the pages, hearts, loves, room sizes
    #/size           size check + the rooms in the house you live in now */
 const Plans = (() => {
-  const TABS = [['#/plans', 'Plans'], ['#/size', 'Size check']];
+  const TABS = [['#/plans', 'Plans'], ['#/additions', 'Additions'], ['#/size', 'Size check']];
   const sorted = () => kind('plan').sort((a, b) => (b.hearts || 0) - (a.hearts || 0) || newest(a, b));
   const myRooms = () => kind('room').sort((a, b) => a.t - b.t);
   const estimate = p => {
@@ -175,6 +175,7 @@ const Plans = (() => {
       ${stats(p) ? `<p class="stats">${stats(p)}</p>` : ''}
       ${est ? `<p class="est">Rough build estimate: <b>${money(est)}</b> <span class="muted">(${commas(p.sqft)} sq ft × ${money(settings().costPerSqft)})</span></p>`
         : p.sqft ? `<p class="muted small">Add your build cost per sq ft on the Savings page to see a rough estimate.</p>` : ''}
+      ${kind('addition').filter(x => x.planId === id).map(x => `<p class="add-line">+ <a href="#/additions/${x.id}">${esc(x.name)}</a> later${Additions.sqftOf(x) ? ` (${commas(Additions.sqftOf(x))} sq ft)` : ''}</p>`).join('')}
       ${p.link ? `<a class="btn small ghost" href="${esc(p.link)}" target="_blank" rel="noopener">${icon('open')} Open plan online</a>` : ''}
     </div>
 

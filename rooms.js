@@ -5,6 +5,9 @@
      pin.side          'starter' | 'upgrade' (older photos have none = Upgrades)
      board.starterNotes, starterNotesBy, starterNotesAt    Starter notes
      board.notes, notesBy, notesAt                         Upgrades notes
+   Future rooms (board.addition = an addition's id, board.dims = its size)
+   belong to an addition on the Plans page. They have no Starter | Upgrades
+   toggle: one set of photos and notes (stored like the Upgrades side).
    #/rooms          all the boards
    #/rooms/{id}     one board */
 const Rooms = (() => {
@@ -59,6 +62,10 @@ const Rooms = (() => {
   });
 
   const boards = () => kind('board').sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.t - b.t);
+  const mainBoards = () => boards().filter(b => !b.addition);
+  const futureBoards = addId => boards().filter(b => b.addition === addId);
+  const siblings = b => (b.addition ? futureBoards(b.addition) : mainBoards());
+  const boardLabel = b => { const a = b.addition && get(b.addition); return a ? `${b.name} (${a.name})` : b.name; };
   const pinsIn = id => kind('pin').filter(p => p.board === id).sort(newest);
   const coverOf = b => {
     const pins = pinsIn(b.id);
@@ -72,7 +79,7 @@ const Rooms = (() => {
       return {
         photo: p.photo,
         title: p.caption || '',
-        sub: [board && `${esc(board.name)} · ${SIDES[sideOf(p)]}`, byLine(p), p.link && `<a href="${esc(p.link)}" target="_blank" rel="noopener">Open link</a>`].filter(Boolean).join(' · '),
+        sub: [board && (board.addition ? `${esc(board.name)} · Future room` : `${esc(board.name)} · ${SIDES[sideOf(p)]}`), byLine(p), p.link && `<a href="${esc(p.link)}" target="_blank" rel="noopener">Open link</a>`].filter(Boolean).join(' · '),
         actions: [
           { label: `${icon('heart', p.fav ? 'filled' : '')} ${p.fav ? 'Loved' : 'Love'}`, fn: async () => {
             await DB.update(p.id, { fav: !p.fav });
@@ -88,17 +95,17 @@ const Rooms = (() => {
               save: async v => { await DB.update(p.id, v); resolve({ item: item({ ...p, ...v }) }); },
             });
           }) },
-          { label: `Move to ${sideOf(p) === 'starter' ? 'Upgrades' : 'Starter'}`, fn: async () => {
+          ...(board && board.addition ? [] : [{ label: `Move to ${sideOf(p) === 'starter' ? 'Upgrades' : 'Starter'}`, fn: async () => {
             const to = sideOf(p) === 'starter' ? 'upgrade' : 'starter';
             await DB.update(p.id, { side: to });
             toast(`Moved to ${SIDES[to]}`);
             return 'close';
-          } },
+          } }]),
           { label: 'Make cover', fn: async () => { await DB.update(p.board, { cover: p.id }); toast('Board cover set'); } },
           { label: 'Move', fn: () => new Promise(resolve => {
             form({
               title: 'Move to another board',
-              fields: [{ name: 'board', label: 'Board', type: 'select', value: p.board, options: boards().map(b => [b.id, b.name]) }],
+              fields: [{ name: 'board', label: 'Board', type: 'select', value: p.board, options: boards().map(b => [b.id, boardLabel(b)]) }],
               saveLabel: 'Move',
               save: async v => { await DB.update(p.id, { board: v.board }); toast(`Moved to ${get(v.board).name}`); resolve('close'); },
             });
@@ -118,14 +125,19 @@ const Rooms = (() => {
     nav: 'rooms',
     render([id]) {
       if (id) return board(id);
-      const list = boards();
-      return `${pageTop('Room boards', { link: linkBtn('Inspiration'), sub: 'Ideas and inspiration for every room', right: `<button class="btn small" data-act="addBoard">${icon('plus')} Room</button>` })}
-      ${list.length ? `<div class="grid boards">${list.map(b => {
+      const list = mainBoards();
+      const card = b => {
         const pins = pinsIn(b.id);
         const loved = pins.filter(p => p.fav).length;
         return `<a class="board-card" href="#/rooms/${b.id}">${cover(coverOf(b), 'rooms')}
           <div class="tile-txt"><h3>${esc(b.name)}</h3><p>${pins.length} photo${pins.length === 1 ? '' : 's'}${loved ? ` · ${loved} ${icon('heart', 'tiny filled')}` : ''}${notesOf(b, 'starter') || notesOf(b, 'upgrade') ? ` · ${icon('note', 'tiny')} notes` : ''}</p></div></a>`;
-      }).join('')}</div>` : empty('rooms', 'No boards yet', 'Add a board for each room you’re dreaming about.')}`;
+      };
+      const future = kind('addition').sort((a, b) => a.t - b.t).map(a => [a, futureBoards(a.id)]).filter(([, bs]) => bs.length);
+      return `${pageTop('Room boards', { link: linkBtn('Inspiration'), sub: 'Ideas and inspiration for every room', right: `<button class="btn small" data-act="addBoard">${icon('plus')} Room</button>` })}
+      ${list.length ? `<div class="grid boards">${list.map(card).join('')}</div>` : empty('rooms', 'No boards yet', 'Add a board for each room you’re dreaming about.')}
+      ${future.map(([a, bs]) => `<section class="future-group">
+        <div class="row-head"><h2>Future rooms: ${esc(a.name)}</h2><a href="#/additions/${a.id}">The addition</a></div>
+        <div class="grid boards">${bs.map(card).join('')}</div></section>`).join('')}`;
     },
     // Long notes fold to a few lines with Show more.
     after(root) {
@@ -134,13 +146,13 @@ const Rooms = (() => {
     },
     acts: {
       notes(el) {
-        const b = get(el.dataset.id), key = noteKey(side);
+        const b = get(el.dataset.id), key = noteKey(side), future = !!b.addition;
         // A suggestion chip adds "Cabinets: " on a new line, ready to type.
         const topic = el.dataset.topic;
         const cur = (b[key] || '').replace(/\s+$/, '');
         const value = topic ? `${cur}${cur ? '\n' : ''}${topic}: ` : b[key] || '';
         const s = form({
-          title: `${b.name}: ${SIDES[side]} notes`,
+          title: future ? `${b.name} notes` : `${b.name}: ${SIDES[side]} notes`,
           fields: [{ name: 'notes', label: '', type: 'textarea', rows: 10, value, autofocus: true,
             placeholder: side === 'starter' ? 'Builder-grade white shaker cabinets\nLaminate counters for now\nAsk about soft-close hinges' : 'Sage green cabinets, glass-front uppers\nQuartz counters\nFarmhouse sink' }],
           save: v => DB.update(b.id, { [key]: v.notes, [`${key}By`]: S.uid, [`${key}At`]: Date.now() }),
@@ -159,7 +171,7 @@ const Rooms = (() => {
           title: 'New room board',
           fields: [{ name: 'name', label: 'Room', placeholder: 'Craft room, Screened porch…', required: true, autofocus: true }],
           save: async v => {
-            const id = await DB.add({ kind: 'board', name: v.name, order: boards().length, cover: null });
+            const id = await DB.add({ kind: 'board', name: v.name, order: mainBoards().length, cover: null });
             location.hash = `#/rooms/${id}`;
           },
         });
@@ -183,21 +195,23 @@ const Rooms = (() => {
       },
       editBoard(el) {
         const b = get(el.dataset.id);
-        const list = boards();
+        const list = siblings(b);
         const at = list.findIndex(x => x.id === b.id);
         form({
           title: 'Edit board',
           fields: [
             { name: 'name', label: 'Room', value: b.name, required: true },
+            ...(b.addition ? [{ name: 'dims', label: 'Size', value: b.dims || '', placeholder: '12 x 13', hint: 'Width × length, like 12x13 or 12\'6" x 13\'.' }] : []),
             { name: 'link', label: 'Link for this room (optional)', type: 'url', value: b.link || '', placeholder: 'pinterest.com/you/dream-kitchen', hint: 'The link button on this board opens it. Leave blank to use your Inspiration favorite.' },
             { name: 'pos', label: 'Position in the list', type: 'select', value: at, options: list.map((x, i) => [i, `${i + 1}. ${x.id === b.id ? '(here now)' : x.name}`]) },
           ],
           save: async v => {
+            if (v.dims && !Size.parse(v.dims)) throw new Error(`Couldn’t read the size “${v.dims}”. Try it like 12x13.`);
             const order = list.filter(x => x.id !== b.id);
             order.splice(+v.pos, 0, b);
             for (let i = 0; i < order.length; i++) {
               const x = order[i];
-              const patch = x.id === b.id ? { name: v.name, link: v.link, order: i } : { order: i };
+              const patch = x.id === b.id ? { name: v.name, link: v.link, order: i, ...(b.addition ? { dims: v.dims } : {}) } : { order: i };
               if (x.id === b.id || x.order !== i) await DB.update(x.id, patch);
             }
           },
@@ -206,7 +220,7 @@ const Rooms = (() => {
             const msg = pins.length ? `Delete the ${b.name} board and its ${pins.length} photo${pins.length === 1 ? '' : 's'}?` : `Delete the ${b.name} board?`;
             if (!(await ask(msg))) return false;
             await DB.removeMany([...pins, b]);
-            location.hash = '#/rooms';
+            location.hash = b.addition ? `#/additions/${b.addition}` : '#/rooms';
             return true;
           },
         });
@@ -219,6 +233,11 @@ const Rooms = (() => {
     if (!b) return empty('rooms', 'Board not found', 'It may have been deleted.', '<a class="btn" href="#/rooms">All boards</a>');
     // A different board (or coming back to one) always starts on Starter.
     if (openBoard !== id) { openBoard = id; side = 'starter'; lovedOnly = false; }
+    // Future rooms have one set of photos and notes (kept as the Upgrades side).
+    const add = b.addition && get(b.addition);
+    if (b.addition) side = 'upgrade';
+    const dims = b.addition && Size.parse(b.dims);
+    const feel = dims && Size.compare(dims, kind('room'), b.name);
     const every = pinsIn(id);
     const count = s => every.filter(p => sideOf(p) === s).length;
     const all = every.filter(p => sideOf(p) === side);
@@ -226,22 +245,22 @@ const Rooms = (() => {
     const lovedN = all.filter(p => p.fav).length;
     const notes = notesOf(b, side), key = noteKey(side);
     return `${pageTop(b.name, {
-      back: ['#/rooms', 'Room boards'],
+      back: add ? [`#/additions/${add.id}`, add.name] : ['#/rooms', 'Room boards'],
       link: linkBtn('Inspiration', b.link && { url: b.link, name: `${b.name} board link` }),
-      sub: `${every.length} photo${every.length === 1 ? '' : 's'}`,
+      sub: add ? `Future room · ${esc(add.name)}${dims ? ` · ${Size.dims(dims)}` : ''}` : `${every.length} photo${every.length === 1 ? '' : 's'}`,
       right: `<button class="icon-btn" data-act="editBoard" data-id="${id}" aria-label="Edit board">${icon('edit')}</button>`,
     })}
-    <div class="side-toggle" role="tablist" aria-label="Starter or upgrades">
+    ${add ? (feel ? `<p class="feel-line">${esc(feel.text)}</p>` : '') : `<div class="side-toggle" role="tablist" aria-label="Starter or upgrades">
       ${Object.entries(SIDES).map(([k, label]) => `<button role="tab" aria-selected="${side === k}" class="${side === k ? 'on' : ''}" data-act="side" data-side="${k}">${label}<span>${count(k)}</span></button>`).join('')}
-    </div>
+    </div>`}
     ${notes ? `<section class="card pad notes-card">
-      <div class="row-head"><h2>${icon('note')} ${SIDES[side]} notes</h2><button class="btn small ghost" data-act="notes" data-id="${id}">Edit</button></div>
+      <div class="row-head"><h2>${icon('note')} ${add ? 'Notes' : `${SIDES[side]} notes`}</h2><button class="btn small ghost" data-act="notes" data-id="${id}">Edit</button></div>
       <p class="notes clamp">${esc(notes)}</p>
       <button class="linkish more" data-act="more" hidden>Show more</button>
       ${b[`${key}At`] ? `<p class="muted small">Updated${personName(b[`${key}By`]) ? ` by ${esc(personName(b[`${key}By`]))}` : ''} · ${niceDate(b[`${key}At`])}</p>` : ''}
-    </section>` : `<button class="add-notes" data-act="notes" data-id="${id}">${icon('note')} Add ${side === 'starter' ? 'starter' : 'upgrade'} notes for the ${esc(b.name.toLowerCase())}</button>`}
+    </section>` : `<button class="add-notes" data-act="notes" data-id="${id}">${icon('note')} Add ${add ? '' : side === 'starter' ? 'starter ' : 'upgrade '}notes for the ${esc(b.name.toLowerCase())}</button>`}
     <div class="focus">
-      <p class="lbl">Things to decide <span class="muted">· tap one to add it to your ${side === 'starter' ? 'starter' : 'upgrade'} notes</span></p>
+      <p class="lbl">Things to decide <span class="muted">· tap one to add it to your ${add ? '' : side === 'starter' ? 'starter ' : 'upgrade '}notes</span></p>
       <div class="focus-chips">${focusFor(b).map(t => {
         const done = parseNotes(notes).items.some(i => i.key === labelKey(t));
         return `<button class="chip${done ? ' on' : ''}" data-act="notes" data-id="${id}" data-topic="${esc(t)}">${done ? '✓ ' : '+ '}${esc(t)}</button>`;
@@ -257,9 +276,10 @@ const Rooms = (() => {
         ${p.caption ? `<figcaption>${esc(p.caption)}</figcaption>` : ''}
       </figure>`).join('')}</div>`
       : lovedOnly ? empty('heart', 'No loved photos', 'Tap the heart on a photo to love it.')
+        : add ? empty('camera', 'No photos yet', 'Add ideas for this room: screenshots from Pinterest, Instagram, anything you love.')
         : side === 'starter' ? empty('camera', 'No starter photos yet', 'Add what you’ll build with first: builder-grade finishes, model home photos, the basic version.')
           : empty('camera', 'No upgrade photos yet', 'Add the dream version: screenshots from Pinterest, Instagram, anything you love.')}`;
   }
 
-  return { view, boards, pinsIn, notesOf, SIDES, sideInfo, parseNotes };
+  return { view, boards, mainBoards, futureBoards, pinsIn, notesOf, SIDES, sideInfo, parseNotes, coverOf };
 })();

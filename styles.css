@@ -560,3 +560,34 @@ input[type=range]:focus { box-shadow: none; }
 .compare-rows i { color: var(--muted); font-weight: 400; }
 .room-up .side-note { font-size: .9rem; }
 .room-up > .btn { align-self: flex-start; }
+
+/* Budget */
+.b-sum .big { font-size: calc(2.6rem * var(--ts)); }
+.b-parts { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.b-parts li, .b-later a, .b-later button { display: flex; justify-content: space-between; gap: 12px; }
+.b-parts li span { color: var(--muted); }
+.b-later { display: grid; gap: 8px; margin-top: 12px; }
+@media (min-width: 560px) { .b-later { grid-template-columns: 1fr 1fr; } }
+.b-later a, .b-later button { background: var(--cream); border: 0; border-radius: 12px; padding: 12px 14px; text-decoration: none; color: inherit; cursor: pointer; font: inherit; text-align: left; }
+.b-list { display: flex; flex-direction: column; }
+.b-row { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; background: none; border: 0; border-bottom: 1px solid var(--line); text-align: left; cursor: pointer; }
+.b-list .b-row:last-child { border-bottom: 0; }
+.b-name { display: flex; flex-direction: column; gap: 2px; font-weight: 700; }
+.b-name small { font-weight: 400; color: var(--muted); font-size: .84rem; }
+.b-name .badge { margin-left: 6px; vertical-align: 1px; }
+.b-amt { font-weight: 800; white-space: nowrap; }
+.b-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+.b-math { background: var(--cream); border-radius: 12px; padding: 10px 14px; margin: 8px 0; }
+.b-tips { margin-top: 12px; }
+.b-tips summary { font-size: calc(1.1rem * var(--ts)); }
+
+/* Additions and future rooms */
+.future-group { margin-top: 6px; }
+.future-group .row-head h2 { font-size: calc(1.3rem * var(--ts)); }
+.future-rooms { display: grid; gap: 10px; }
+@media (min-width: 640px) { .future-rooms { grid-template-columns: 1fr 1fr; } }
+a.now-room { text-decoration: none; color: inherit; }
+.now-room .feel-txt { font-size: .88rem; margin-top: 2px; }
+.feel-line { color: var(--sage-deep); font-weight: 700; margin-top: -6px; }
+.add-line { color: var(--muted); }
+.add-line a { font-weight: 700; }

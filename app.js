@@ -51,6 +51,14 @@ async function seed() {
   if (DB.demo) await DB.addSamples();
 }
 
+// Additions used to be kept on the Budget; now each is its own thing.
+async function moveAdditions() {
+  const old = (get('budget') || {}).additions || [];
+  if (!old.length) return;
+  for (const a of old) await DB.add({ kind: 'addition', name: a.name, sqft: a.sqft ?? null, amount: a.amount ?? null, note: a.note || '', planId: null, photos: [] });
+  await DB.put('budget', { additions: [] });
+}
+
 // ---------- routing ----------
 let current = null;
 let pending = false;
@@ -215,8 +223,9 @@ Views.home = {
 
 // Every room's notes at a glance; tap one to open that board.
 function notesCard() {
-  const rooms = kind('board').filter(b => Rooms.notesOf(b, 'starter') || Rooms.notesOf(b, 'upgrade')).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const part = (b, s) => Rooms.notesOf(b, s) ? `<span class="side-note"><i>${Rooms.SIDES[s]}</i>${esc(Rooms.notesOf(b, s))}</span>` : '';
+  const has = b => Rooms.notesOf(b, 'starter') || Rooms.notesOf(b, 'upgrade');
+  const rooms = [...Rooms.mainBoards(), ...Additions.list().flatMap(a => Rooms.futureBoards(a.id))].filter(has);
+  const part = (b, s) => Rooms.notesOf(b, s) ? `<span class="side-note"><i>${b.addition ? `Future · ${esc((get(b.addition) || {}).name || '')}` : Rooms.SIDES[s]}</i>${esc(Rooms.notesOf(b, s))}</span>` : '';
   return `<section class="card pad room-notes">
     <div class="row-head"><h2>${icon('note')} Room notes</h2><a href="#/rooms">All rooms</a></div>
     ${rooms.length ? `<ul>${rooms.map(b => `<li><a href="#/rooms/${b.id}"><b>${esc(b.name)}</b>${part(b, 'starter')}${part(b, 'upgrade')}</a></li>`).join('')}</ul>`
@@ -333,7 +342,7 @@ function start(store) {
       Look.sync(get(S.uid));
       if (!setUp && !fromCache) {
         setUp = true;
-        seed().then(() => { if (!personName(S.uid)) askName(true); }).catch(console.error);
+        seed().then(moveAdditions).then(() => { if (!personName(S.uid)) askName(true); }).catch(console.error);
       }
       refresh();
     }, err => {

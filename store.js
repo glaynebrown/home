@@ -14,7 +14,10 @@
                                           cost, prep, prepNote, done }
        kind 'land'      a property      { name, place, link, acres, price, status, hearts,
                                           notes, photos: [], checks: { key: 'yes'|'no' } }
-       kind 'link'      a website       { name, url, category, note }
+       kind 'link'      a website       { name, url, category, note, fav }
+       kind 'budget'    (id 'budget')   build budget, see budget.js
+       kind 'addition'  a section to build later, see additions.js
+       (a board with .addition is a future room in that addition)
 
    A photo is { path, thumbPath, url, thumbUrl, w, h }; files live in Storage
    under photos/. When firebase-config.js hasn't been filled in yet, the app

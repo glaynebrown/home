@@ -3,7 +3,7 @@
    #/money      savings
    #/upgrades   now vs. someday */
 const Money = (() => {
-  const TABS = [['#/money', 'Savings'], ['#/upgrades', 'Upgrades']];
+  const TABS = [['#/money', 'Savings'], ['#/budget', 'Budget'], ['#/upgrades', 'Upgrades']];
   let showAll = false;
   let filter = 'all';
 
@@ -201,7 +201,7 @@ const Money = (() => {
   // Wishlist view: every room with something on its board, in board order;
   // cost items for rooms without a board go last.
   function byRoom(list) {
-    const boards = Rooms.boards();
+    const boards = Rooms.mainBoards();
     const key = s => String(s || '').trim().toLowerCase();
     const names = new Set(boards.map(b => key(b.name)));
     const cards = boards.map(b => roomCard(b, list.filter(u => key(u.room) === key(b.name)))).join('');
@@ -212,5 +212,5 @@ const Money = (() => {
     return `${cards}${other.length ? `<section class="card pad room-up"><div class="row-head"><h2>Other upgrades</h2></div><div class="grid ups">${other.map(upCard).join('')}</div></section>` : ''}`;
   }
 
-  return { editGoal, depositForm };
+  return { editGoal, depositForm, TABS };
 })();
