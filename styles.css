@@ -681,3 +681,13 @@ a.now-room { text-decoration: none; color: inherit; }
 .compare-table thead th { font-family: var(--serif); font-size: calc(1.1rem * var(--ts)); white-space: nowrap; }
 .compare-table tbody th { color: var(--muted); font-weight: 700; white-space: nowrap; }
 .compare-table td { min-width: 120px; }
+
+/* Home-screen app on iPhone: a little more room below the clock and battery,
+   and a solid strip behind them so nothing shows through blurry while scrolling. */
+@media (display-mode: standalone) {
+  main { padding-top: calc(env(safe-area-inset-top) + 28px); }
+  body::before {
+    content: ''; position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+    height: env(safe-area-inset-top); background: var(--bg);
+  }
+}
