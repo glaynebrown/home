@@ -377,7 +377,9 @@ function houseSvg(pct) {
 // scrolls. onDrop(ids) gets the new order of data-sort ids.
 // While something is being dragged, the screen doesn't redraw (sortingNow).
 let sortingNow = false;
-function sortable(box, { item, onDrop, signal }) {
+// byIndex: the items sit in several columns, and their real order is their
+// data-i (reading order), not their order on the page.
+function sortable(box, { item, onDrop, signal, byIndex }) {
   const HOLD_MS = 450, SLOP = 10;
   const opts = { signal };
   let timer = null, start = null, el = null, ghost = null, offset = null, dragging = false, justDragged = false, scroller = null, last = null;
@@ -409,10 +411,22 @@ function sortable(box, { item, onDrop, signal }) {
     }, 16);
   }
 
+  let logical = null; // byIndex: the order being built while dragging
+  let lastTarget = null; // only move once per card you pass over (no flip-flopping)
   function place(x, y) {
     const over = document.elementFromPoint(x, y);
     const target = over && over.closest(item);
-    if (!target || target === el || !box.contains(target)) return;
+    if (target === el) { lastTarget = null; return; }
+    if (!target || target === lastTarget || !box.contains(target)) return;
+    lastTarget = target;
+    if (byIndex) {
+      if (!logical) logical = items().sort((a, b) => a.dataset.i - b.dataset.i).map(t => t.dataset.sort);
+      const from = logical.indexOf(el.dataset.sort), to = logical.indexOf(target.dataset.sort);
+      logical.splice(from, 1);
+      logical.splice(to, 0, el.dataset.sort);
+      target.parentNode.insertBefore(el, from < to ? target.nextSibling : target);
+      return;
+    }
     const list = items();
     box.insertBefore(el, list.indexOf(target) > list.indexOf(el) ? target.nextSibling : target);
   }
@@ -434,7 +448,10 @@ function sortable(box, { item, onDrop, signal }) {
     dragging = sortingNow = false;
     justDragged = true;
     setTimeout(() => { justDragged = false; }, 350);
-    Promise.resolve(onDrop(items().map(t => t.dataset.sort)))
+    lastTarget = null;
+    const ids = byIndex ? (logical || items().sort((a, b) => a.dataset.i - b.dataset.i).map(t => t.dataset.sort)) : items().map(t => t.dataset.sort);
+    logical = null;
+    Promise.resolve(onDrop(ids))
       .catch(e => { console.error(e); toast(e.message || 'Couldn’t save the new order.'); })
       .finally(() => { if (typeof pending !== 'undefined' && pending) refresh(); });
   }

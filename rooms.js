@@ -316,7 +316,7 @@ const Rooms = (() => {
       };
       root.querySelectorAll('.grid.boards').forEach(box => sortable(box, { item: '.board-card', onDrop: saveOrder, signal }));
       const photos = root.querySelector('.masonry');
-      if (photos && !lovedOnly) sortable(photos, { item: '.pin', onDrop: saveOrder, signal });
+      if (photos && !lovedOnly) sortable(photos, { item: '.pin', onDrop: saveOrder, signal, byIndex: true });
     },
     acts: {
       notes(el) {
@@ -408,6 +408,25 @@ const Rooms = (() => {
     },
   };
 
+  // Photo board layout: each photo goes into whichever column is shortest,
+  // using its known shape, so the columns stay even (iPhone Safari's own
+  // column layout could pile photos into one column before they loaded).
+  const colCount = () => (innerWidth >= 980 ? 4 : innerWidth >= 720 ? 3 : 2);
+  let lastCols = colCount();
+  addEventListener('resize', () => {
+    const n = colCount();
+    if (n !== lastCols) { lastCols = n; if (location.hash.startsWith('#/rooms/')) render(true); }
+  });
+  function masonry(list, html) {
+    const cols = Array.from({ length: colCount() }, () => ({ h: 0, items: [] }));
+    list.forEach((p, i) => {
+      const c = cols.reduce((a, b) => (b.h < a.h - 0.001 ? b : a));
+      c.items.push(html(p, i));
+      c.h += (p.photo.h || 3) / (p.photo.w || 4) + (p.caption ? 0.18 : 0) + 0.05;
+    });
+    return `<div class="masonry">${cols.map(c => `<div class="m-col">${c.items.join('')}</div>`).join('')}</div>`;
+  }
+
   function board(id) {
     const b = get(id);
     if (!b) return empty('rooms', 'Board not found', 'It may have been deleted.', '<a class="btn" href="#/rooms">All boards</a>');
@@ -453,13 +472,12 @@ const Rooms = (() => {
         const done = parts.some(x => x.topic && x.key === labelKey(t));
         return `<button class="chip${done ? ' on' : ''}" data-act="topic" data-id="${id}" data-topic="${esc(t)}">${done ? '✓ ' : '+ '}${esc(t)}</button>`;
       }).join('')}</div>` : ''}
-    ${pins.length ? `<div class="masonry">${pins.map((p, i) => `<figure class="pin" data-sort="${p.id}">
-        <button class="pin-img" data-act="open" data-board="${id}" data-i="${i}"><img src="${esc(thumb(p.photo))}" alt="${esc(p.caption || '')}" loading="lazy" ${p.photo.w ? `width="${p.photo.w}" height="${p.photo.h}"` : ''}></button>
+    ${pins.length ? masonry(pins, (p, i) => `<figure class="pin" data-sort="${p.id}" data-i="${i}">
+        <button class="pin-img" data-act="open" data-board="${id}" data-i="${i}"><img src="${esc(thumb(p.photo))}" alt="${esc(p.caption || '')}" loading="lazy" style="aspect-ratio:${p.photo.w || 4} / ${p.photo.h || 3}"></button>
         <button class="pin-fav${p.fav ? ' on' : ''}" data-act="fav" data-id="${p.id}" aria-label="${p.fav ? 'Loved' : 'Love'}">${icon('heart')}</button>
         ${p.topic ? `<span class="pin-tag">${esc(p.topicLabel || p.topic)}</span>` : ''}
         ${p.caption ? `<figcaption>${esc(p.caption)}</figcaption>` : ''}
-      </figure>`).join('')}</div>
-`
+      </figure>`)
       : lovedOnly ? empty('heart', 'No loved photos', 'Tap the heart on a photo to love it.')
         : b.general ? empty('camera', 'No photos yet', 'Add photos of layouts you like: how the kitchen opens to the dining room, where the mudroom meets the entry, and so on.')
         : add ? empty('camera', 'No photos yet', 'Add ideas for this room: screenshots from Pinterest, Instagram, anything you love.')
