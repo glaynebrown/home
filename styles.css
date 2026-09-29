@@ -750,9 +750,6 @@ a.now-room { text-decoration: none; color: inherit; }
 .bar-pct { font-weight: 800; color: var(--sage-deep); font-size: .95rem; min-width: 2.6em; text-align: right; }
 .basis { font-size: .84rem; font-style: italic; color: var(--muted); margin-top: -2px; }
 
-/* Things to decide, tucked behind a + */
-details.focus { display: flex; flex-direction: column; gap: 8px; }
-.focus-plus { list-style: none; width: 36px; height: 36px; border-radius: 50%; border: 1.5px dashed var(--sand); display: grid; place-items: center; color: var(--sage-deep); font-size: 1.4rem; font-weight: 600; cursor: pointer; line-height: 1; transition: transform .15s ease; }
-.focus-plus::-webkit-details-marker { display: none; }
-details.focus[open] .focus-plus { background: var(--sage-soft); border-style: solid; border-color: var(--sage); transform: rotate(45deg); }
-details.focus .focus-chips { margin-top: 8px; }
+/* Things to decide, tucked behind a + (right end of the Add photos row) */
+.focus-plus { margin-left: auto; width: 40px; height: 40px; flex: none; border-radius: 50%; border: 1.5px dashed var(--sand); background: none; display: grid; place-items: center; color: var(--sage-deep); font-size: 1.5rem; font-weight: 600; cursor: pointer; line-height: 1; transition: transform .15s ease; }
+.focus-plus.open { background: var(--sage-soft); border-style: solid; border-color: var(--sage); transform: rotate(45deg); }

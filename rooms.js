@@ -16,7 +16,6 @@ const Rooms = (() => {
   let lovedOnly = false;
   let dragControl = null;
   let focusOpen = false;
-  document.addEventListener('toggle', e => { if (e.target.matches && e.target.matches('details.focus')) focusOpen = e.target.open; }, true);
   let side = 'starter';
   let openBoard = null;
 
@@ -335,6 +334,7 @@ const Rooms = (() => {
         const t = s.q('textarea');
         setTimeout(() => { t.focus(); t.setSelectionRange(t.value.length, t.value.length); t.scrollTop = t.scrollHeight; }, 80);
       },
+      focusToggle() { focusOpen = !focusOpen; render(true); },
       side(el) { side = el.dataset.side; lovedOnly = false; render(true); },
       topic(el) { topicForm(get(el.dataset.id), side, el.dataset.topic); },
       topicPhoto(el) {
@@ -444,17 +444,15 @@ const Rooms = (() => {
       <button class="linkish more" data-act="more" hidden>Show more</button>
       ${b[`${key}At`] ? `<p class="muted small">Updated${personName(b[`${key}By`]) ? ` by ${esc(personName(b[`${key}By`]))}` : ''} · ${niceDate(b[`${key}At`])}</p>` : ''}
     </section>` : `<button class="add-notes" data-act="notes" data-id="${id}">${icon('note')} Add ${single ? '' : side === 'starter' ? 'starter ' : 'upgrade '}notes${b.general ? '' : ` for the ${esc(b.name.toLowerCase())}`}</button>`}
-    <details class="focus"${focusOpen ? ' open' : ''}>
-      <summary class="focus-plus" aria-label="Things to decide">+</summary>
-      <div class="focus-chips">${focusFor(b).map(t => {
-        const done = parts.some(x => x.topic && x.key === labelKey(t));
-        return `<button class="chip${done ? ' on' : ''}" data-act="topic" data-id="${id}" data-topic="${esc(t)}">${done ? '✓ ' : '+ '}${esc(t)}</button>`;
-      }).join('')}</div>
-    </details>
     <div class="bar-row">
       <button class="btn" data-act="addPhotos" data-id="${id}">${icon('camera')} Add photos</button>
       ${lovedN ? `<button class="chip${lovedOnly ? ' on' : ''}" data-act="loved">${icon('heart', 'tiny filled')} Loved (${lovedN})</button>` : ''}
+      <button class="focus-plus${focusOpen ? ' open' : ''}" data-act="focusToggle" aria-expanded="${focusOpen}" aria-label="Things to decide">+</button>
     </div>
+    ${focusOpen ? `<div class="focus-chips">${focusFor(b).map(t => {
+        const done = parts.some(x => x.topic && x.key === labelKey(t));
+        return `<button class="chip${done ? ' on' : ''}" data-act="topic" data-id="${id}" data-topic="${esc(t)}">${done ? '✓ ' : '+ '}${esc(t)}</button>`;
+      }).join('')}</div>` : ''}
     ${pins.length ? `<div class="masonry">${pins.map((p, i) => `<figure class="pin" data-sort="${p.id}">
         <button class="pin-img" data-act="open" data-board="${id}" data-i="${i}"><img src="${esc(thumb(p.photo))}" alt="${esc(p.caption || '')}" loading="lazy" ${p.photo.w ? `width="${p.photo.w}" height="${p.photo.h}"` : ''}></button>
         <button class="pin-fav${p.fav ? ' on' : ''}" data-act="fav" data-id="${p.id}" aria-label="${p.fav ? 'Loved' : 'Love'}">${icon('heart')}</button>
