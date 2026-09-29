@@ -181,6 +181,14 @@ function cover(photo, iconName, cls = '') {
 }
 
 // ---------- home ----------
+const HOME_BLOCKS = ['savings', 'steps', 'links', 'upgrades', 'builders', 'docs', 'ideas'];
+// This person's card order, with any new cards added at the end.
+function homeOrder() {
+  const mine = ((get(S.uid) || {}).homeOrder || []).filter(k => HOME_BLOCKS.includes(k));
+  return [...mine, ...HOME_BLOCKS.filter(k => !mine.includes(k))];
+}
+let homeDrag = null;
+
 Views.home = {
   nav: 'home',
   render() {
@@ -197,38 +205,56 @@ Views.home = {
     const tile = (href, iconName, title, sub, photo) => `<a class="tile" href="${href}">${cover(photo, iconName)}
       <div class="tile-txt"><h3>${esc(title)}</h3><p>${sub}</p></div></a>`;
 
+    // Each card below the photo, in the order this person arranged them.
+    const blocks = {
+      savings: ['full', `<a class="card save-card" href="#/money">
+        <div class="save-house">${houseSvg(pct)}</div>
+        <div class="save-txt">
+          <p class="eyebrow">Our savings</p>
+          <p class="big">${money(saved)}</p>
+          ${goal ? `<p class="muted">of ${money(goal)} · ${Math.floor(pct * 100)}% there</p>
+            ${Budget.goalBar(saved, g)}`
+            : '<p class="muted">Tap to set your goal</p>'}
+        </div>
+      </a>`],
+      steps: ['full', Steps.card()],
+      links: ['half', tile('#/links', 'links', 'Design links', `${kind('link').length} saved`, null)],
+      upgrades: ['half', tile('#/upgrades', 'money', 'Upgrades', ups.length ? `${ups.filter(u => !u.done).length} on the wishlist` : 'Now vs. someday', upPhoto)],
+      builders: ['half', st.journalMode ? Journal.card() : Builders.card()],
+      docs: ['half', Docs.card()],
+      ideas: ['full', strip.length ? `<section class="strip-wrap">
+        <div class="row-head"><h2>${loved.length >= 4 ? 'Loved ideas' : 'Newest ideas'}</h2><a href="#/rooms">All boards</a></div>
+        <div class="strip">${strip.map((p, i) => `<button class="strip-pin" data-act="pin" data-i="${i}"><img src="${esc(thumb(p.photo))}" alt="${esc(p.caption || '')}" loading="lazy"></button>`).join('')}</div>
+      </section>` : ''],
+    };
+    const order = homeOrder().filter(k => blocks[k][1]);
+
     return `
     ${heroHtml(st)}
-
-    <a class="card save-card" href="#/money">
-      <div class="save-house">${houseSvg(pct)}</div>
-      <div class="save-txt">
-        <p class="eyebrow">Our savings</p>
-        <p class="big">${money(saved)}</p>
-        ${goal ? `<p class="muted">of ${money(goal)} · ${Math.floor(pct * 100)}% there</p>
-          ${Budget.goalBar(saved, g)}`
-          : '<p class="muted">Tap to set your goal</p>'}
-      </div>
-    </a>
-
-    ${Steps.card()}
-
-    <div class="tiles two-up">
-      ${tile('#/size', 'ruler', 'Size check', 'How big does it feel?', null)}
-      ${tile('#/upgrades', 'money', 'Upgrades', ups.length ? `${ups.filter(u => !u.done).length} on the wishlist` : 'Now vs. someday', upPhoto)}
-    </div>
-
-    <div class="tiles two-up half-cards">
-      ${Builders.card()}
-      ${Docs.card()}
-    </div>
-
-    ${strip.length ? `<section class="strip-wrap">
-      <div class="row-head"><h2>${loved.length >= 4 ? 'Loved ideas' : 'Newest ideas'}</h2><a href="#/rooms">All boards</a></div>
-      <div class="strip">${strip.map((p, i) => `<button class="strip-pin" data-act="pin" data-i="${i}"><img src="${esc(thumb(p.photo))}" alt="${esc(p.caption || '')}" loading="lazy"></button>`).join('')}</div>
-    </section>` : ''}`;
+    <div class="home-grid">${order.map(k => `<div class="hb ${blocks[k][0]}" data-sort="${k}">${blocks[k][1]}</div>`).join('')}</div>
+    <p class="muted small center-note">Press and hold a card to move it.</p>`;
+  },
+  // Hold and drag to rearrange (saved for this person only).
+  after(root) {
+    if (homeDrag) homeDrag.abort();
+    homeDrag = new AbortController();
+    const box = root.querySelector('.home-grid');
+    if (box) sortable(box, {
+      item: '.hb', signal: homeDrag.signal,
+      onDrop: keys => {
+        const rest = homeOrder().filter(k => !keys.includes(k)); // cards hidden right now keep their place at the end
+        return DB.put(S.uid, { kind: 'person', homeOrder: [...keys, ...rest] });
+      },
+    });
   },
   acts: {
+    // Builders & quotes ⇄ Build journal (shared with Nick).
+    async switchCard(el) {
+      const toJournal = el.dataset.to === 'journal';
+      const ok = await ask(toJournal ? 'Switch this card to the build journal? Builders & quotes stays available from the journal page.' : 'Switch this card back to Builders & quotes?',
+        { ok: 'Switch', danger: false, title: toJournal ? 'Build started?' : 'Back to builders?' });
+      if (ok) await saveSettings({ journalMode: toJournal });
+    },
     pin(el) {
       const pins = kind('pin').sort(newest);
       const loved = pins.filter(p => p.fav);

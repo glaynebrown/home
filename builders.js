@@ -203,11 +203,14 @@ const Builders = (() => {
   // The home page card (half width, left of Documents).
   function card() {
     const all = list(), top = all.find(b => b.status === 'top') || all.find(b => b.perSqft);
-    return `<a class="card pad home-card" href="#/builders">
-      <h2>${icon('money')} Builders & quotes</h2>
-      <p class="muted small">${all.length} builder${all.length === 1 ? '' : 's'}</p>
-      ${top ? `<p class="small"><b>${esc(top.name)}</b>${top.perSqft ? ` · ${money(top.perSqft)}/sq ft` : ''}</p>` : '<p class="small muted">Track quotes and what’s included.</p>'}
-    </a>`;
+    return `<div class="card pad home-card has-switch">
+      <a class="card-link" href="#/builders">
+        <h2>${icon('money')} Builders & quotes</h2>
+        <p class="muted small">${all.length} builder${all.length === 1 ? '' : 's'}</p>
+        ${top ? `<p class="small"><b>${esc(top.name)}</b>${top.perSqft ? ` · ${money(top.perSqft)}/sq ft` : ''}</p>` : '<p class="small muted">Track quotes and what’s included.</p>'}
+      </a>
+      <button class="card-switch" data-act="switchCard" data-to="journal">Build started → journal</button>
+    </div>`;
   }
 
   return { seed, card, list };

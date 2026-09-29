@@ -206,11 +206,11 @@ const Land = (() => {
   const tint = s => TINTS[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % TINTS.length];
 
   Views.links = {
-    nav: 'links',
+    nav: 'home',
     render([focus]) {
       const all = kind('link').sort((a, b) => a.t - b.t);
       const cats = [...LINK_CATEGORIES, ...new Set(all.map(l => l.category).filter(c => !LINK_CATEGORIES.includes(c)))];
-      return `${pageTop('Design links', { sub: 'Star a favorite in each group and it opens from that page’s link button', right: `<button class="btn small" data-act="add">${icon('plus')} Link</button>` })}
+      return `${pageTop('Design links', { back: ['#/', 'Home'], sub: 'Star a favorite in each group and it opens from that page’s link button', right: `<button class="btn small" data-act="add">${icon('plus')} Link</button>` })}
       ${all.length || focus ? cats.map(c => {
         const list = all.filter(l => (l.category || 'Other') === c);
         const page = PAGE_LINKS[c];

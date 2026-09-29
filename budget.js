@@ -121,7 +121,7 @@ const Budget = (() => {
       <span class="b-name"><span class="b-title">${label}</span>${sub ? `<small>${sub}</small>` : ''}</span><span class="b-amt">${amount}</span></button>`;
 
   Views.budget = {
-    nav: 'home',
+    nav: 'budget',
     render() {
       const t = totals(), st = settings();
       const saved = savedTotal();

@@ -19,6 +19,7 @@
        kind 'addition'  a section to build later, see additions.js
        kind 'step'      steps & timeline, see steps.js
        kind 'builder', 'question'   builders & quotes, see builders.js
+       kind 'journal'   build journal entries, see journal.js
        kind 'doc'       documents (a photo, or a PDF under docs/), see docs.js
        (a board with .addition is a future room in that addition)
 

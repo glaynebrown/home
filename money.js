@@ -50,7 +50,7 @@ const Money = (() => {
   }
 
   Views.money = {
-    nav: 'home',
+    nav: 'budget',
     render() {
       const st = settings();
       const g = Budget.goalNow();
@@ -176,7 +176,7 @@ const Money = (() => {
   }
 
   Views.upgrades = {
-    nav: 'home',
+    nav: 'budget',
     render() {
       const all = kind('upgrade').sort((a, b) => !!a.done - !!b.done || (a.room || '').localeCompare(b.room || '') || a.t - b.t);
       if ((filter === 'prep' && !all.some(u => u.prep && !u.done)) || (filter === 'done' && !all.some(u => u.done))) filter = 'all';
