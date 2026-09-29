@@ -5,6 +5,17 @@
      { landId | landPrice, planId | sqft, cushion (%), markup (%, used by additions),
        site: [{ key, name, amount, quote, note, custom }] }
    Additions live on Plans → Additions (additions.js); only their total shows here.
+
+   The savings goal can be figured from all this (settings.goalMode 'budget'):
+   the land is bought and the build starts right after, and the land counts
+   toward the down payment, so
+     goal = down % of (our land share + site work + house)
+          + cushion (cash; it can't come out of the loan)
+          + land closing % of our land share
+          + construction loan closing % of the loan
+          + our share of the perc test, surveys and plan revisions
+   "Enough to buy the land" = land down % of our share + land closing + those costs.
+   Loan settings live in budget.loan (all adjustable).
    Cost per sq ft is the same one the floor plans use (settings.costPerSqft).
 
    Move-in total = land + site work + starter house + cushion (on site work
@@ -23,7 +34,21 @@ const Budget = (() => {
     ['fencing', 'Fencing', 'Optional'],
   ];
 
+  const LOAN = { split: 50, down: 20, landDown: 15, landClosing: 2.5, loanClosing: 3, perc: 750, boundary: 750, subdivision: 2000, revisions: 1400 };
+  // [key, label, kind, hint]
+  const LOAN_FIELDS = {
+    split: ['Split', 'pct', 'Your share of the land price and land closing costs'],
+    down: ['Down payment', 'pct', 'Construction loans usually need 20–25%'],
+    landDown: ['Land down payment', 'pct', 'Usually 10–15% for raw land. Used for the “enough to buy the land” marker.'],
+    landClosing: ['Land closing costs', 'pct', 'Usually 1–2.5% of the land price'],
+    loanClosing: ['Construction loan closing costs', 'pct', 'Often 2–5% of the loan'],
+    perc: ['Perc test', 'money', 'Split cost · our share. Paid up front, not part of the loan.'],
+    boundary: ['Boundary survey', 'money', 'Split cost · our share'],
+    subdivision: ['Subdivision survey', 'money', 'Split cost · our share. Estimated $1,000–$2,000.'],
+    revisions: ['Plan revisions', 'money', 'Split cost · our share'],
+  };
   const data = () => get('budget') || {};
+  const loan = () => ({ ...LOAN, ...(data().loan || {}) });
   const save = patch => DB.put('budget', { kind: 'budget', ...patch });
   const cps = () => settings().costPerSqft || 0;
 
@@ -38,7 +63,9 @@ const Budget = (() => {
   function totals() {
     const d = data();
     const landItem = d.landId && get(d.landId);
-    const land = landItem ? landItem.price || 0 : d.landPrice || 0;
+    const landFull = landItem ? landItem.price || 0 : d.landPrice || 0;
+    const L = loan();
+    const land = Math.round(landFull * L.split / 100);
     const lines = siteLines();
     const site = lines.reduce((s, l) => s + (l.amount || 0), 0);
     const plan = d.planId && get(d.planId);
@@ -49,10 +76,38 @@ const Budget = (() => {
     const additions = Additions.total();
     const upgrades = kind('upgrade').filter(u => !u.done).reduce((s, u) => s + (u.cost || 0), 0);
     return {
-      d, landItem, land, lines, site, plan, sqft, house, cushionPct, cushion, additions, upgrades,
+      d, L, landItem, landFull, land, lines, site, plan, sqft, house, cushionPct, cushion, additions, upgrades,
       moveIn: land + site + house + cushion,
       quotes: lines.filter(l => l.amount != null && l.quote).length, filled: lines.filter(l => l.amount != null).length,
     };
+  }
+
+  // The cash to have saved before the loan.
+  function cash() {
+    const t = totals(), L = t.L;
+    const financed = t.land + t.site + t.house;
+    const down = Math.round(financed * L.down / 100);
+    const landClosing = Math.round(t.land * L.landClosing / 100);
+    const loanAmount = financed - down;
+    const loanClosing = Math.round(loanAmount * L.loanClosing / 100);
+    const fees = (L.perc || 0) + (L.boundary || 0) + (L.subdivision || 0) + (L.revisions || 0);
+    const goal = down + t.cushion + landClosing + loanClosing + fees;
+    const landReady = Math.round(t.land * L.landDown / 100) + landClosing + fees;
+    return { t, L, financed, down, landClosing, loanAmount, loanClosing, fees, goal, landReady };
+  }
+
+  // The goal the savings card uses: figured from the Budget, or a set amount.
+  function goalNow() {
+    const st = settings();
+    if (st.goalMode === 'budget') { const c = cash(); return { amount: c.goal, land: c.landReady, auto: true }; }
+    return { amount: st.goal || 0, land: null, auto: false };
+  }
+  // Progress bar with a marker for "enough to buy the land".
+  function goalBar(saved, g) {
+    const pct = g.amount ? Math.min(100, saved / g.amount * 100) : 0;
+    const m = g.land && g.amount && g.land < g.amount ? g.land / g.amount * 100 : null;
+    return `<div class="bar"><i style="width:${pct.toFixed(1)}%"></i>${m != null ? `<b class="mark" style="left:${m.toFixed(1)}%"></b>` : ''}</div>
+      ${m != null ? `<p class="mark-note">${saved >= g.land ? '✓ Enough to buy the land' : `▲ Enough to buy the land at ${money(g.land)}`}</p>` : ''}`;
   }
 
   const row = (label, amount, act, sub = '') => `<button class="b-row" data-act="${act}">
@@ -73,7 +128,7 @@ const Budget = (() => {
         <p class="eyebrow">Move-in total</p>
         <p class="big">${money(t.moveIn)}</p>
         <ul class="b-parts">
-          <li><span>Land</span><b>${money(t.land)}</b></li>
+          <li><span>Land (our share)</span><b>${money(t.land)}</b></li>
           <li><span>Site work</span><b>${money(t.site)}</b></li>
           <li><span>Starter house</span><b>${money(t.house)}</b></li>
           <li><span>Cushion (${t.cushionPct}%)</span><b>${money(t.cushion)}</b></li>
@@ -87,8 +142,9 @@ const Budget = (() => {
 
       <section class="card pad">
         <div class="row-head"><h2>Land</h2></div>
-        ${row(t.landItem ? esc(t.landItem.name) : t.d.landPrice ? 'Placeholder amount' : 'Pick a property', t.land ? money(t.land) : dash, 'land',
+        ${row(t.landItem ? esc(t.landItem.name) : t.d.landPrice ? 'Placeholder amount' : 'Pick a property', t.landFull ? money(t.landFull) : dash, 'land',
           t.landItem ? [t.landItem.acres && `${commas(t.landItem.acres)} acres`, esc(t.landItem.place || '')].filter(Boolean).join(' · ') : 'From your Land page, or a placeholder amount')}
+        ${row('Split cost · our share', `${t.L.split}%`, 'loan" data-k="split', t.landFull ? `Our share of the land: ${money(t.land)}` : 'Your share of the land price')}
       </section>
 
       <section class="card pad">
@@ -108,8 +164,9 @@ const Budget = (() => {
         ${row('Cost per sq ft', cps() ? money(cps()) : dash, 'cps', 'From builder quotes in Louisa County. Builder-grade finishes are usually included.')}
         <p class="b-math">${t.sqft && cps() ? `${commas(t.sqft)} sq ft × ${money(cps())} = <b>${money(t.house)}</b>` : 'Add the square feet and cost per sq ft to see the starter house cost.'}</p>
         ${roomsSqft ? `<p class="muted small">The rooms listed on this plan add up to ${commas(Math.round(roomsSqft))} sq ft. Halls, closets, stairs and walls make up the rest, so the plan’s total is the one to use.</p>` : ''}
-        ${row('Cushion', `${t.cushionPct}%`, 'cushion', `Builds almost always run over. ${money(t.cushion)} on site work and the house.`)}
-      </section>`;
+      </section>
+
+      ${goalHtml()}`;
     },
     acts: {
       land() {
@@ -177,15 +234,49 @@ const Budget = (() => {
           save: v => saveSettings({ costPerSqft: v.costPerSqft }),
         });
       },
+      loan(el) {
+        const k = el.dataset.k, [label, type, hint] = LOAN_FIELDS[k];
+        form({
+          title: label,
+          fields: [{ name: 'v', label: type === 'pct' ? 'Percent' : 'Our share', type: type === 'pct' ? 'number' : 'money', value: loan()[k], hint, autofocus: true }],
+          save: v => save({ loan: { ...(data().loan || {}), [k]: v.v ?? LOAN[k] } }),
+        });
+      },
+      async useGoal() {
+        await saveSettings({ goalMode: 'budget' });
+        toast('Your savings goal now follows the Budget');
+      },
       cushion() {
         form({
           title: 'Cushion',
-          fields: [{ name: 'cushion', label: 'Percent', type: 'number', value: data().cushion ?? 10, hint: '10% is a common starting point.' }],
+          fields: [{ name: 'cushion', label: 'Percent', type: 'number', value: data().cushion ?? 10, hint: '10% is a common starting point. It’s cash: it can’t come out of the loan.' }],
           save: v => save({ cushion: v.cushion ?? 10 }),
         });
       },
     },
   };
 
-  return { totals };
+  function goalHtml() {
+    const c = cash(), L = c.L, t = c.t;
+    const auto = settings().goalMode === 'budget';
+    const pctRow = (k, amount, sub) => row(`${LOAN_FIELDS[k][0]} <span class="muted">(${L[k]}%)</span>`, money(amount), `loan" data-k="${k}`, sub);
+    const feeRow = k => row(LOAN_FIELDS[k][0], money(L[k] || 0), `loan" data-k="${k}`, 'Split cost · our share');
+    return `<section class="card pad" id="b-goal">
+      <div class="row-head"><h2>Cash we need</h2>${auto ? '<span class="badge done">Our savings goal</span>' : ''}</div>
+      <p class="muted small">Buy the land, then start building right after. The land counts toward the down payment.</p>
+      <div class="b-list">
+        ${pctRow('down', c.down, `Of our land share + site work + house (${money(c.financed)})`)}
+        ${row(`Cushion <span class="muted">(${t.cushionPct}%)</span>`, money(t.cushion), 'cushion', 'Cash, in case the build runs over. It can’t come out of the loan.')}
+        ${pctRow('landClosing', c.landClosing, `Of our land share (${money(t.land)})`)}
+        ${pctRow('loanClosing', c.loanClosing, `Of the ${money(c.loanAmount)} loan`)}
+        ${feeRow('perc')}${feeRow('boundary')}${feeRow('subdivision')}${feeRow('revisions')}
+      </div>
+      <div class="b-total"><span>Savings goal</span><b>${money(c.goal)}</b></div>
+      ${row(`Enough to buy the land <span class="muted">(${L.landDown}% down)</span>`, money(c.landReady), 'loan" data-k="landDown', 'Land down payment + land closing + the split costs above. Shown as a marker on the savings bar.')}
+      ${auto ? '<p class="muted small">Your savings goal follows this total. To use a set amount instead, tap Edit goal on the Savings tab.</p>'
+        : '<button class="btn" data-act="useGoal">Use this as our savings goal</button>'}
+    </section>`;
+  }
+
+  return { totals, cash, goalNow, goalBar };
 })();

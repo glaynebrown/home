@@ -170,7 +170,8 @@ Views.home = {
     const land = kind('land');
     const links = kind('link');
     const ups = kind('upgrade');
-    const saved = savedTotal(), goal = st.goal || 0;
+    const g = Budget.goalNow();
+    const saved = savedTotal(), goal = g.amount;
     const pct = goal ? saved / goal : 0;
     const loved = pins.filter(p => p.fav);
     const strip = (loved.length >= 4 ? loved : pins).slice(0, 14);
@@ -190,7 +191,7 @@ Views.home = {
         <p class="eyebrow">Our savings</p>
         <p class="big">${money(saved)}</p>
         ${goal ? `<p class="muted">of ${money(goal)} · ${Math.floor(pct * 100)}% there</p>
-          <div class="bar"><i style="width:${Math.min(100, pct * 100).toFixed(1)}%"></i></div>`
+          ${Budget.goalBar(saved, g)}`
           : '<p class="muted">Tap to set your goal</p>'}
       </div>
     </a>

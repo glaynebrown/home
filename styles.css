@@ -242,7 +242,7 @@ textarea { resize: vertical; }
 .save-house { width: 96px; flex: none; }
 .save-txt { flex: 1; min-width: 0; }
 .big { font-family: var(--serif); font-size: 2.2rem; font-weight: 700; line-height: 1.05; color: var(--ink); }
-.bar { height: 10px; background: var(--cream); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+.bar { position: relative; height: 10px; background: var(--cream); border-radius: 999px; overflow: hidden; margin-top: 8px; }
 .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--sage), var(--sage-deep)); border-radius: 999px; }
 .house { width: 100%; height: auto; }
 
@@ -591,3 +591,11 @@ a.now-room { text-decoration: none; color: inherit; }
 .feel-line { color: var(--sage-deep); font-weight: 700; margin-top: -6px; }
 .add-line { color: var(--muted); }
 .add-line a { font-weight: 700; }
+
+/* Savings goal from the Budget */
+.bar .mark { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: var(--wood-deep); }
+.mark-note { font-size: .8rem; color: var(--wood-deep); font-weight: 700; margin-top: 4px; }
+.b-total { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 0 6px; border-top: 2px solid var(--ink); margin-top: 4px; font-weight: 800; }
+.b-total b { font-family: var(--serif); font-size: calc(1.6rem * var(--ts)); }
+#b-goal > .btn { margin-top: 8px; }
+.b-title .muted { font-weight: 600; }

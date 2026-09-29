@@ -14,10 +14,12 @@ const Money = (() => {
     form({
       title: 'Our goal',
       fields: [
-        { name: 'goal', label: 'Savings goal', type: 'money', value: st.goal ?? '', placeholder: '150,000', hint: 'Whatever you’re saving toward right now: land, the build, or both.' },
+        { name: 'goalMode', type: 'seg', value: st.goalMode === 'budget' ? 'budget' : 'fixed', options: [['budget', 'From the Budget'], ['fixed', 'A set amount']],
+          hint: `From the Budget: the down payment, cushion, closing costs and split costs (${money(Budget.cash().goal)} right now). Adjust them on the Budget tab.` },
+        { name: 'goal', label: 'Set amount', type: 'money', value: st.goal ?? '', placeholder: '150,000', hint: 'Used when “A set amount” is picked.' },
         { name: 'costPerSqft', label: 'Build cost per sq ft (optional)', type: 'money', value: st.costPerSqft ?? '', placeholder: '175', hint: 'From builder quotes in your area. Used for rough estimates on each floor plan.' },
       ],
-      save: v => saveSettings({ goal: v.goal, costPerSqft: v.costPerSqft }),
+      save: v => saveSettings({ goalMode: v.goalMode, goal: v.goal, costPerSqft: v.costPerSqft }),
     });
   }
 
@@ -51,7 +53,8 @@ const Money = (() => {
     nav: 'home',
     render() {
       const st = settings();
-      const saved = savedTotal(), goal = st.goal || 0;
+      const g = Budget.goalNow();
+      const saved = savedTotal(), goal = g.amount;
       const pct = goal ? saved / goal : 0;
       const list = deposits();
       const shown = showAll ? list : list.slice(0, 6);
@@ -63,8 +66,8 @@ const Money = (() => {
         <div class="goal-house">${houseSvg(pct)}</div>
         <div class="goal-txt">
           <p class="big">${money(saved)}</p>
-          ${goal ? `<p class="muted">saved of ${money(goal)}</p>
-            <div class="bar"><i style="width:${Math.min(100, pct * 100).toFixed(1)}%"></i></div>
+          ${goal ? `<p class="muted">saved of ${money(goal)}${g.auto ? ' <a href="#/budget">(from the Budget)</a>' : ''}</p>
+            ${Budget.goalBar(saved, g)}
             <p class="pct">${pct >= 1 ? 'Goal reached! 🎉' : `${Math.floor(pct * 100)}% there`}</p>`
             : '<p class="muted">saved so far</p>'}
           <div class="btn-row">
