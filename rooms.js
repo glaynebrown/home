@@ -12,6 +12,7 @@
    #/rooms/{id}     one board */
 const Rooms = (() => {
   let lovedOnly = false;
+  let dragControl = null;
   let side = 'starter';
   let openBoard = null;
 
@@ -51,6 +52,128 @@ const Rooms = (() => {
     return { items, other };
   }
 
+  // Topic photos: pins tagged with a notes topic (pin.topic = its key,
+  // pin.topicLabel = how it's written), on the same side of the board.
+  const topicPins = (b, s, key) => pinsIn(b.id).filter(p => p.topic === key && sideOf(p) === s);
+
+  // Everything on one side's notes, in order: "Label: text" topics (with
+  // their photos), plain lines, then topics that only have photos so far.
+  function noteParts(b, s) {
+    const parts = [], seen = new Set();
+    String(notesOf(b, s)).split('\n').forEach(line => {
+      const m = line.match(/^\s*[-•*]?\s*([^:]{2,30}):\s*(.*)$/);
+      if (m) {
+        const key = labelKey(m[1]);
+        if (seen.has(key)) return;
+        seen.add(key);
+        const pics = topicPins(b, s, key);
+        if (m[2].trim() || pics.length) parts.push({ topic: true, label: m[1].trim(), key, text: m[2].trim(), pics });
+      } else if (line.trim()) parts.push({ topic: false, text: line.trim() });
+    });
+    pinsIn(b.id).filter(p => p.topic && sideOf(p) === s && !seen.has(p.topic)).forEach(p => {
+      seen.add(p.topic);
+      parts.push({ topic: true, label: p.topicLabel || p.topic, key: p.topic, text: '', pics: topicPins(b, s, p.topic) });
+    });
+    return parts;
+  }
+
+  // Writes (or removes) the "Label: text" line for one topic.
+  function withTopicLine(text, label, value) {
+    const key = labelKey(label), out = [];
+    let found = false;
+    String(text || '').split('\n').forEach(line => {
+      const m = line.match(/^\s*[-•*]?\s*([^:]{2,30}):\s*(.*)$/);
+      if (m && labelKey(m[1]) === key) {
+        if (!found && value) out.push(`${label}: ${value}`);
+        found = true;
+        return;
+      }
+      out.push(line);
+    });
+    if (!found && value) out.push(`${label}: ${value}`);
+    return out.join('\n').replace(/^\s+|\s+$/g, '');
+  }
+
+  // A topic's own card: a note plus example photos (e.g. "Pantry").
+  function topicForm(b, s, label) {
+    const key = labelKey(label);
+    const part = noteParts(b, s).find(x => x.topic && x.key === key);
+    if (part) label = part.label;
+    const keep = [...(part ? part.pics : [])];
+    const dropped = [];
+    const added = [];
+    const sh = sheet(label, `<form class="topic-form" novalidate>
+      <label class="field"><span class="lbl">Note</span><textarea name="note" rows="4">${esc(part ? part.text : '')}</textarea></label>
+      <div class="field"><span class="lbl">Photos</span><div class="topic-photos"></div>
+        <div class="btn-row"><button type="button" class="btn small ghost" data-pick>${icon('camera')} Choose photos</button>
+        ${navigator.clipboard && navigator.clipboard.read ? '<button type="button" class="btn small ghost" data-paste>Paste photo</button>' : ''}</div></div>
+      <p class="muted small">Photos also go on the ${b.addition ? '' : `${SIDES[s].toLowerCase()} side of the `}board, tagged “${esc(label)}.”</p>
+      <p class="form-err" hidden></p>
+      <div class="sheet-actions">${part ? '<button type="button" class="btn ghost danger" data-remove>Delete</button>' : ''}<span class="grow"></span><button class="btn" data-save>Save</button></div>
+    </form>`);
+    const grid = sh.q('.topic-photos');
+    const draw = () => {
+      grid.innerHTML = [
+        ...keep.map((p, i) => `<div class="tp"><img src="${esc(thumb(p.photo))}" alt=""><button type="button" class="tp-x" data-k="${i}" aria-label="Remove photo">×</button></div>`),
+        ...added.map((f, i) => `<div class="tp"><img src="${f.url}" alt=""><button type="button" class="tp-x" data-n="${i}" aria-label="Remove photo">×</button></div>`),
+      ].join('') || '<p class="muted small">No photos yet.</p>';
+    };
+    draw();
+    grid.addEventListener('click', e => {
+      const x = e.target.closest('.tp-x');
+      if (!x) return;
+      if (x.dataset.k != null) dropped.push(...keep.splice(+x.dataset.k, 1));
+      else added.splice(+x.dataset.n, 1);
+      draw();
+    });
+    const addFile = blob => { added.push({ blob, url: URL.createObjectURL(blob) }); draw(); };
+    sh.q('[data-pick]').onclick = async () => (await pickFiles(true)).forEach(addFile);
+    const paste = sh.q('[data-paste]');
+    if (paste) paste.onclick = async () => {
+      try {
+        for (const item of await navigator.clipboard.read()) {
+          const type = item.types.find(t => t.startsWith('image/'));
+          if (type) return addFile(await item.getType(type));
+        }
+        toast('No photo copied yet. In Safari, press and hold a photo → Copy.', 4000);
+      } catch (err) {
+        console.warn(err);
+        toast('Couldn’t paste. In Safari, press and hold a photo → Copy, then try again.', 4000);
+      }
+    };
+    const noteKey_ = noteKey(s);
+    const saveNote = value => {
+      const cur = b[noteKey_] || '';
+      const next = withTopicLine(cur, label, value);
+      return next === cur.trim() ? null : DB.update(b.id, { [noteKey_]: next, [`${noteKey_}By`]: S.uid, [`${noteKey_}At`]: Date.now() });
+    };
+    sh.q('form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = sh.q('[data-save]');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const photos = added.length ? await uploadFiles(added.map(a => a.blob)) : [];
+        for (const photo of photos) await DB.add({ kind: 'pin', board: b.id, side: s, topic: key, topicLabel: label, photo, caption: '', link: '', fav: false });
+        if (dropped.length) await DB.removeMany(dropped);
+        await saveNote(sh.q('[name=note]').value.trim().replace(/\n+/g, ' '));
+        sh.close();
+      } catch (err) {
+        console.error(err);
+        const m = sh.q('.form-err'); m.textContent = err.message || 'Something went wrong. Try again.'; m.hidden = false;
+        btn.disabled = false; btn.textContent = 'Save';
+      }
+    });
+    const del = sh.q('[data-remove]');
+    if (del) del.onclick = async () => {
+      const pics = part.pics.length;
+      if (!(await ask(`Delete the ${label} note${pics ? ` and its ${pics} photo${pics === 1 ? '' : 's'}` : ''}?`))) return;
+      if (pics) await DB.removeMany(part.pics);
+      await saveNote('');
+      sh.close();
+    };
+    setTimeout(() => sh.q('[name=note]').focus(), 60);
+  }
+
   // Loved photo first, otherwise the newest, for one side of a board.
   function sideInfo(b, s) {
     const pins = pinsIn(b.id).filter(p => sideOf(p) === s);
@@ -66,7 +189,14 @@ const Rooms = (() => {
   const futureBoards = addId => boards().filter(b => b.addition === addId);
   const siblings = b => (b.addition ? futureBoards(b.addition) : mainBoards());
   const boardLabel = b => { const a = b.addition && get(b.addition); return a ? `${b.name} (${a.name})` : b.name; };
-  const pinsIn = id => kind('pin').filter(p => p.board === id).sort(newest);
+  // Photos you've rearranged keep their spot; new ones show up first.
+  const pinsIn = id => kind('pin').filter(p => p.board === id).sort((a, b) => {
+    const x = a.order, y = b.order;
+    if (x == null && y == null) return newest(a, b);
+    if (x == null) return -1;
+    if (y == null) return 1;
+    return x - y;
+  });
   const coverOf = b => {
     const pins = pinsIn(b.id);
     return (pins.find(p => p.id === b.cover) || pins[0] || {}).photo;
@@ -79,7 +209,7 @@ const Rooms = (() => {
       return {
         photo: p.photo,
         title: p.caption || '',
-        sub: [board && (board.addition ? `${esc(board.name)} · Future room` : `${esc(board.name)} · ${SIDES[sideOf(p)]}`), byLine(p), p.link && `<a href="${esc(p.link)}" target="_blank" rel="noopener">Open link</a>`].filter(Boolean).join(' · '),
+        sub: [p.topic && `<b>${esc(p.topicLabel || p.topic)}</b>`, board && (board.addition ? `${esc(board.name)} · Future room` : `${esc(board.name)} · ${SIDES[sideOf(p)]}`), byLine(p), p.link && `<a href="${esc(p.link)}" target="_blank" rel="noopener">Open link</a>`].filter(Boolean).join(' · '),
         actions: [
           { label: `${icon('heart', p.fav ? 'filled' : '')} ${p.fav ? 'Loved' : 'Love'}`, fn: async () => {
             await DB.update(p.id, { fav: !p.fav });
@@ -129,20 +259,34 @@ const Rooms = (() => {
       const card = b => {
         const pins = pinsIn(b.id);
         const loved = pins.filter(p => p.fav).length;
-        return `<a class="board-card" href="#/rooms/${b.id}">${cover(coverOf(b), 'rooms')}
+        return `<a class="board-card" href="#/rooms/${b.id}" data-sort="${b.id}">${cover(coverOf(b), 'rooms')}
           <div class="tile-txt"><h3>${esc(b.name)}</h3><p>${pins.length} photo${pins.length === 1 ? '' : 's'}${loved ? ` · ${loved} ${icon('heart', 'tiny filled')}` : ''}${notesOf(b, 'starter') || notesOf(b, 'upgrade') ? ` · ${icon('note', 'tiny')} notes` : ''}</p></div></a>`;
       };
       const future = kind('addition').sort((a, b) => a.t - b.t).map(a => [a, futureBoards(a.id)]).filter(([, bs]) => bs.length);
       return `${pageTop('Room boards', { link: linkBtn('Inspiration'), sub: 'Ideas and inspiration for every room', right: `<button class="btn small" data-act="addBoard">${icon('plus')} Room</button>` })}
-      ${list.length ? `<div class="grid boards">${list.map(card).join('')}</div>` : empty('rooms', 'No boards yet', 'Add a board for each room you’re dreaming about.')}
+      ${list.length ? `<div class="grid boards" data-group="main">${list.map(card).join('')}</div>` : empty('rooms', 'No boards yet', 'Add a board for each room you’re dreaming about.')}
       ${future.map(([a, bs]) => `<section class="future-group">
         <div class="row-head"><h2>Future rooms: ${esc(a.name)}</h2><a href="#/additions/${a.id}">The addition</a></div>
-        <div class="grid boards">${bs.map(card).join('')}</div></section>`).join('')}`;
+        <div class="grid boards" data-group="${a.id}">${bs.map(card).join('')}</div></section>`).join('')}
+      ${list.length > 1 ? '<p class="muted small center-note">Press and hold a room to drag it to a new spot.</p>' : ''}`;
     },
     // Long notes fold to a few lines with Show more.
     after(root) {
       const n = root.querySelector('.notes.clamp'), more = root.querySelector('.more');
       if (n && more) more.hidden = n.scrollHeight <= n.clientHeight + 2;
+      // Hold and drag: room cards (each group on its own) and photos on a board.
+      if (dragControl) dragControl.abort();
+      dragControl = new AbortController();
+      const signal = dragControl.signal;
+      const saveOrder = async ids => {
+        for (let i = 0; i < ids.length; i++) {
+          const x = get(ids[i]);
+          if (x && x.order !== i) await DB.update(ids[i], { order: i });
+        }
+      };
+      root.querySelectorAll('.grid.boards').forEach(box => sortable(box, { item: '.board-card', onDrop: saveOrder, signal }));
+      const photos = root.querySelector('.masonry');
+      if (photos && !lovedOnly) sortable(photos, { item: '.pin', onDrop: saveOrder, signal });
     },
     acts: {
       notes(el) {
@@ -161,6 +305,11 @@ const Rooms = (() => {
         setTimeout(() => { t.focus(); t.setSelectionRange(t.value.length, t.value.length); t.scrollTop = t.scrollHeight; }, 80);
       },
       side(el) { side = el.dataset.side; lovedOnly = false; render(true); },
+      topic(el) { topicForm(get(el.dataset.id), side, el.dataset.topic); },
+      topicPhoto(el) {
+        const b = get(el.dataset.id), pics = topicPins(b, side, el.dataset.key);
+        view(pics, pics.findIndex(p => p.id === el.dataset.pin));
+      },
       more(el) {
         const n = el.previousElementSibling;
         n.classList.toggle('clamp');
@@ -244,6 +393,7 @@ const Rooms = (() => {
     const pins = lovedOnly ? all.filter(p => p.fav) : all;
     const lovedN = all.filter(p => p.fav).length;
     const notes = notesOf(b, side), key = noteKey(side);
+    const parts = noteParts(b, side);
     return `${pageTop(b.name, {
       back: add ? [`#/additions/${add.id}`, add.name] : ['#/rooms', 'Room boards'],
       link: linkBtn('Inspiration', b.link && { url: b.link, name: `${b.name} board link` }),
@@ -253,33 +403,38 @@ const Rooms = (() => {
     ${add ? (feel ? `<p class="feel-line">${esc(feel.text)}</p>` : '') : `<div class="side-toggle" role="tablist" aria-label="Starter or upgrades">
       ${Object.entries(SIDES).map(([k, label]) => `<button role="tab" aria-selected="${side === k}" class="${side === k ? 'on' : ''}" data-act="side" data-side="${k}">${label}<span>${count(k)}</span></button>`).join('')}
     </div>`}
-    ${notes ? `<section class="card pad notes-card">
-      <div class="row-head"><h2>${icon('note')} ${add ? 'Notes' : `${SIDES[side]} notes`}</h2><button class="btn small ghost" data-act="notes" data-id="${id}">Edit</button></div>
-      <p class="notes clamp">${esc(notes)}</p>
+    ${parts.length ? `<section class="card pad notes-card">
+      <div class="row-head"><h2>${icon('note')} ${add ? 'Notes' : `${SIDES[side]} notes`}</h2><button class="btn small ghost" data-act="notes" data-id="${id}">Edit all</button></div>
+      <div class="notes clamp">${parts.map(x => x.topic ? `<div class="topic-line">
+          <button class="tl-txt" data-act="topic" data-id="${id}" data-topic="${esc(x.label)}"><b>${esc(x.label)}:</b> ${x.text ? esc(x.text) : '<span class="muted">photos only</span>'}</button>
+          ${x.pics.length ? `<span class="tl-pics">${x.pics.slice(0, 3).map(p => `<button class="tl-pic" data-act="topicPhoto" data-id="${id}" data-key="${x.key}" data-pin="${p.id}"><img src="${esc(thumb(p.photo))}" alt="${esc(x.label)} photo" loading="lazy"></button>`).join('')}${x.pics.length > 3 ? `<span class="tl-more">+${x.pics.length - 3}</span>` : ''}</span>` : ''}
+        </div>` : `<p>${esc(x.text)}</p>`).join('')}</div>
       <button class="linkish more" data-act="more" hidden>Show more</button>
       ${b[`${key}At`] ? `<p class="muted small">Updated${personName(b[`${key}By`]) ? ` by ${esc(personName(b[`${key}By`]))}` : ''} · ${niceDate(b[`${key}At`])}</p>` : ''}
     </section>` : `<button class="add-notes" data-act="notes" data-id="${id}">${icon('note')} Add ${add ? '' : side === 'starter' ? 'starter ' : 'upgrade '}notes for the ${esc(b.name.toLowerCase())}</button>`}
     <div class="focus">
-      <p class="lbl">Things to decide <span class="muted">· tap one to add it to your ${add ? '' : side === 'starter' ? 'starter ' : 'upgrade '}notes</span></p>
+      <p class="lbl">Things to decide <span class="muted">· tap one to add a note and photos</span></p>
       <div class="focus-chips">${focusFor(b).map(t => {
-        const done = parseNotes(notes).items.some(i => i.key === labelKey(t));
-        return `<button class="chip${done ? ' on' : ''}" data-act="notes" data-id="${id}" data-topic="${esc(t)}">${done ? '✓ ' : '+ '}${esc(t)}</button>`;
+        const done = parts.some(x => x.topic && x.key === labelKey(t));
+        return `<button class="chip${done ? ' on' : ''}" data-act="topic" data-id="${id}" data-topic="${esc(t)}">${done ? '✓ ' : '+ '}${esc(t)}</button>`;
       }).join('')}</div>
     </div>
     <div class="bar-row">
       <button class="btn" data-act="addPhotos" data-id="${id}">${icon('camera')} Add photos</button>
       ${lovedN ? `<button class="chip${lovedOnly ? ' on' : ''}" data-act="loved">${icon('heart', 'tiny filled')} Loved (${lovedN})</button>` : ''}
     </div>
-    ${pins.length ? `<div class="masonry">${pins.map((p, i) => `<figure class="pin">
+    ${pins.length ? `<div class="masonry">${pins.map((p, i) => `<figure class="pin" data-sort="${p.id}">
         <button class="pin-img" data-act="open" data-board="${id}" data-i="${i}"><img src="${esc(thumb(p.photo))}" alt="${esc(p.caption || '')}" loading="lazy" ${p.photo.w ? `width="${p.photo.w}" height="${p.photo.h}"` : ''}></button>
         <button class="pin-fav${p.fav ? ' on' : ''}" data-act="fav" data-id="${p.id}" aria-label="${p.fav ? 'Loved' : 'Love'}">${icon('heart')}</button>
+        ${p.topic ? `<span class="pin-tag">${esc(p.topicLabel || p.topic)}</span>` : ''}
         ${p.caption ? `<figcaption>${esc(p.caption)}</figcaption>` : ''}
-      </figure>`).join('')}</div>`
+      </figure>`).join('')}</div>
+      ${pins.length > 1 && !lovedOnly ? '<p class="muted small center-note">Press and hold a photo to drag it to a new spot.</p>' : ''}`
       : lovedOnly ? empty('heart', 'No loved photos', 'Tap the heart on a photo to love it.')
         : add ? empty('camera', 'No photos yet', 'Add ideas for this room: screenshots from Pinterest, Instagram, anything you love.')
         : side === 'starter' ? empty('camera', 'No starter photos yet', 'Add what you’ll build with first: builder-grade finishes, model home photos, the basic version.')
           : empty('camera', 'No upgrade photos yet', 'Add the dream version: screenshots from Pinterest, Instagram, anything you love.')}`;
   }
 
-  return { view, boards, mainBoards, futureBoards, pinsIn, notesOf, SIDES, sideInfo, parseNotes, coverOf };
+  return { view, boards, mainBoards, futureBoards, pinsIn, notesOf, SIDES, sideInfo, parseNotes, coverOf, topicPins };
 })();

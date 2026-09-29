@@ -156,9 +156,10 @@ const Money = (() => {
     if (!st.count && !up.count && !st.notes && !up.notes && !items.length) return '';
     const sn = Rooms.parseNotes(st.notes), un = Rooms.parseNotes(up.notes);
     const keys = [...new Set([...sn.items, ...un.items].map(i => i.key))];
+    const tpic = (s, k) => { const p = Rooms.topicPins(b, s, k)[0]; return p ? `<img class="cmp-pic" src="${esc(thumb(p.photo))}" alt="" loading="lazy">` : ''; };
     const rows = keys.map(k => {
       const a = sn.items.find(i => i.key === k), z = un.items.find(i => i.key === k);
-      return `<li><b>${esc((a || z).label)}</b><span class="from">${a ? esc(a.text) : '<i>not decided</i>'}</span>${icon('arrow')}<span class="to">${z ? esc(z.text) : '<i>not decided</i>'}</span></li>`;
+      return `<li><b>${esc((a || z).label)}</b><span class="from">${tpic('starter', k)}${a ? esc(a.text) : '<i>not decided</i>'}</span>${icon('arrow')}<span class="to">${tpic('upgrade', k)}${z ? esc(z.text) : '<i>not decided</i>'}</span></li>`;
     }).join('');
     const loose = (label, list) => list.length ? `<p class="side-note"><i>${label}</i>${esc(list.join(' · '))}</p>` : '';
     const pic = (info, label) => `<div class="side">${info.photo ? `<img src="${esc(thumb(info.photo))}" alt="" loading="lazy">` : `<div class="side-ph">${icon('camera')}</div>`}

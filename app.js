@@ -101,6 +101,7 @@ function render(keepScroll) {
 // New data from the other phone (or a save) redraws the screen, except while
 // someone is typing in it; then it waits until they leave the box.
 function refresh() {
+  if (sortingNow) { pending = true; return; }
   const a = document.activeElement;
   if (a && view.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) { pending = true; return; }
   pending = false;

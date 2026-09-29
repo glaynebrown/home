@@ -370,3 +370,107 @@ function houseSvg(pct) {
     <path d="M8 151h184" stroke="var(--sage-deep)" stroke-width="3" stroke-linecap="round"/>
   </svg>`;
 }
+
+// ---------- hold and drag to rearrange ----------
+// Press and hold an item (about half a second) until it lifts, drag it to a
+// new spot, let go. A quick tap still works as a tap, and a swipe still
+// scrolls. onDrop(ids) gets the new order of data-sort ids.
+// While something is being dragged, the screen doesn't redraw (sortingNow).
+let sortingNow = false;
+function sortable(box, { item, onDrop, signal }) {
+  const HOLD_MS = 450, SLOP = 10;
+  const opts = { signal };
+  let timer = null, start = null, el = null, ghost = null, offset = null, dragging = false, justDragged = false, scroller = null, last = null;
+  const items = () => [...box.querySelectorAll(item)];
+  const cancelHold = () => { clearTimeout(timer); timer = null; };
+  const begin = (t, x, y) => { el = t; start = { x, y }; cancelHold(); timer = setTimeout(pickUp, HOLD_MS); };
+
+  function pickUp() {
+    timer = null;
+    if (!el || !el.isConnected) return;
+    dragging = sortingNow = true;
+    const r = el.getBoundingClientRect();
+    offset = { x: start.x - r.left, y: start.y - r.top };
+    ghost = el.cloneNode(true);
+    ghost.classList.add('sort-ghost');
+    Object.assign(ghost.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    document.body.appendChild(ghost);
+    el.classList.add('sort-placeholder');
+    box.classList.add('sorting');
+    if (navigator.vibrate) navigator.vibrate(10);
+    // Near the top or bottom of the screen, the page scrolls along.
+    scroller = setInterval(() => {
+      if (!last) return;
+      const edge = 90;
+      if (last.y < edge) window.scrollBy(0, -Math.ceil((edge - last.y) / 6));
+      else if (last.y > innerHeight - edge - 70) window.scrollBy(0, Math.ceil((last.y - innerHeight + edge + 70) / 6));
+      else return;
+      place(last.x, last.y);
+    }, 16);
+  }
+
+  function place(x, y) {
+    const over = document.elementFromPoint(x, y);
+    const target = over && over.closest(item);
+    if (!target || target === el || !box.contains(target)) return;
+    const list = items();
+    box.insertBefore(el, list.indexOf(target) > list.indexOf(el) ? target.nextSibling : target);
+  }
+  function moveTo(x, y) {
+    if (!ghost) return;
+    last = { x, y };
+    ghost.style.left = `${x - offset.x}px`;
+    ghost.style.top = `${y - offset.y}px`;
+    place(x, y);
+  }
+
+  // Always cleans up, even if the touch was interrupted.
+  function drop() {
+    clearInterval(scroller); scroller = null; last = null;
+    if (ghost) ghost.remove();
+    ghost = null;
+    if (el) el.classList.remove('sort-placeholder');
+    box.classList.remove('sorting');
+    dragging = sortingNow = false;
+    justDragged = true;
+    setTimeout(() => { justDragged = false; }, 350);
+    Promise.resolve(onDrop(items().map(t => t.dataset.sort)))
+      .catch(e => { console.error(e); toast(e.message || 'Couldn’t save the new order.'); })
+      .finally(() => { if (typeof pending !== 'undefined' && pending) refresh(); });
+  }
+  const end = () => { cancelHold(); if (dragging) drop(); };
+
+  // Phone: touch.
+  box.addEventListener('touchstart', e => {
+    const t = e.target.closest(item);
+    if (!t || e.touches.length > 1) return;
+    begin(t, e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true, ...opts });
+  box.addEventListener('touchmove', e => {
+    const p = e.touches[0];
+    if (dragging) { e.preventDefault(); moveTo(p.clientX, p.clientY); return; } // the finger moves the card, not the page
+    if (timer && Math.hypot(p.clientX - start.x, p.clientY - start.y) > SLOP) cancelHold(); // it's a scroll
+  }, { passive: false, ...opts });
+  box.addEventListener('touchend', end, opts);
+  box.addEventListener('touchcancel', end, opts);
+
+  // Computer: mouse.
+  box.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || e.button > 0) return;
+    const t = e.target.closest(item);
+    if (t) begin(t, e.clientX, e.clientY);
+  }, opts);
+  window.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse') return;
+    if (dragging) { e.preventDefault(); moveTo(e.clientX, e.clientY); return; }
+    if (timer && Math.hypot(e.clientX - start.x, e.clientY - start.y) > SLOP) cancelHold();
+  }, opts);
+  window.addEventListener('pointerup', e => { if (e.pointerType === 'mouse') end(); }, opts);
+
+  // The tap that ends a drag doesn't also open the card.
+  box.addEventListener('click', e => {
+    if (dragging || justDragged) { e.preventDefault(); e.stopPropagation(); }
+  }, { capture: true, ...opts });
+  box.addEventListener('contextmenu', e => { if (e.target.closest(item)) e.preventDefault(); }, opts);
+  box.addEventListener('dragstart', e => e.preventDefault(), opts);
+}
