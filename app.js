@@ -24,8 +24,8 @@ const byLine = x => {
 const savedTotal = () => kind('deposit').reduce((sum, d) => sum + (d.amount || 0), 0);
 
 // ---------- starter content (made once, by whoever signs in first) ----------
-const STARTER_BOARDS = ['Kitchen', 'Living room', 'Dining', 'Primary bedroom', 'Primary bath', 'Bedrooms', 'Bathrooms',
-  'Mudroom & laundry', 'Front porch', 'Outside the house', 'Barn & homestead', 'Garden & yard'];
+const STARTER_BOARDS = ['General layout', 'Kitchen', 'Living room', 'Dining', 'Primary bedroom', 'Primary bath', 'Bedrooms', 'Bathrooms',
+  'Mudroom & laundry', 'Exterior', 'Barn & homestead', 'Garden & yard'];
 const LINK_CATEGORIES = ['Floor plans & 3D', 'Inspiration', 'Land', 'Building & money', 'Other'];
 const STARTER_LINKS = [
   ['Space Planner', 'https://app.spaceplanner.co', 'Floor plans & 3D', 'Mock up floor plans and see them in 3D', true],
@@ -38,17 +38,20 @@ const STARTER_LINKS = [
   ['LandWatch', 'https://www.landwatch.com', 'Land', 'Rural land and acreage listings'],
 ];
 
+// -> true when it just set everything up (so the one-time fixes below, which
+// are for older setups, are skipped).
 async function seed() {
   const st = settings();
-  if (st.seeded) return;
-  await saveSettings({ seeded: true });
+  if (st.seeded) return false;
+  await saveSettings({ seeded: true, pantryFolded: true, boardsTidied: true });
   if (!kind('board').length) {
-    for (let i = 0; i < STARTER_BOARDS.length; i++) await DB.add({ kind: 'board', name: STARTER_BOARDS[i], order: i, cover: null });
+    for (let i = 0; i < STARTER_BOARDS.length; i++) await DB.add({ kind: 'board', name: STARTER_BOARDS[i], order: i, cover: null, ...(STARTER_BOARDS[i] === 'General layout' ? { general: true } : {}) });
   }
   if (!kind('link').length) {
     for (const [name, url, category, note, fav = false] of STARTER_LINKS) await DB.add({ kind: 'link', name, url, category, note, fav });
   }
   if (DB.demo) await DB.addSamples();
+  return true;
 }
 
 // The pantry lives in the kitchen (Kitchen has a Pantry suggestion), so the
@@ -68,6 +71,39 @@ async function foldPantry() {
   }
   if (Object.keys(patch).length) await DB.update(kitchen.id, patch);
   await DB.remove(pantry);
+}
+
+// Once (2026-09): "Outside the house" becomes "Exterior", the Front porch
+// board folds into it (its photos tagged "Front porch", notes and extra costs
+// as a "Front porch" topic), and a General layout board is added at the top.
+async function tidyBoards() {
+  const st = settings();
+  if (st.boardsTidied) return;
+  await saveSettings({ boardsTidied: true });
+  const main = () => kind('board').filter(b => !b.addition);
+  const named = (...ns) => main().find(b => ns.includes(b.name.trim().toLowerCase()));
+  const ext = named('exterior', 'outside the house');
+  const porch = named('front porch');
+  if (ext && ext.name !== 'Exterior') await DB.update(ext.id, { name: 'Exterior' });
+  if (porch && !ext) await DB.update(porch.id, { name: 'Exterior' });
+  if (porch && ext) {
+    for (const p of kind('pin').filter(p => p.board === porch.id)) {
+      await DB.update(p.id, { board: ext.id, ...(p.topic ? {} : { topic: 'frontporch', topicLabel: 'Front porch' }) });
+    }
+    const patch = {};
+    for (const key of ['starterNotes', 'notes']) {
+      const extra = (porch[key] || '').trim();
+      if (extra) patch[key] = `${(ext[key] || '').trim()}${ext[key] ? '\n' : ''}Front porch: ${extra.replace(/\n+/g, ' · ')}`;
+    }
+    const extras = Object.values(porch.starterExtras || {}).reduce((s, x) => s + ((x && x.amount) || 0), 0);
+    if (extras > 0) patch.starterExtras = { ...(ext.starterExtras || {}), frontporch: { label: 'Front porch', amount: extras } };
+    if (Object.keys(patch).length) await DB.update(ext.id, patch);
+    await DB.remove(porch);
+  }
+  if (!main().some(b => b.general)) {
+    const first = Math.min(0, ...main().map(b => b.order ?? 0)) - 1;
+    await DB.add({ kind: 'board', name: 'General layout', general: true, order: first, cover: null });
+  }
 }
 
 // Additions used to be kept on the Budget; now each is its own thing.
@@ -372,7 +408,7 @@ function start(store) {
       Look.sync(get(S.uid));
       if (!setUp && !fromCache) {
         setUp = true;
-        seed().then(moveAdditions).then(foldPantry).then(() => Steps.seed()).then(() => Builders.seed()).then(() => { if (!personName(S.uid)) askName(true); }).catch(console.error);
+        seed().then(async fresh => { if (!fresh) { await moveAdditions(); await foldPantry(); await tidyBoards(); } }).then(() => Steps.seed()).then(() => Builders.seed()).then(() => { if (!personName(S.uid)) askName(true); }).catch(console.error);
       }
       refresh();
     }, err => {

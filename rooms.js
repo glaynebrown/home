@@ -5,6 +5,8 @@
      pin.side          'starter' | 'upgrade' (older photos have none = Upgrades)
      board.starterNotes, starterNotesBy, starterNotesAt    Starter notes
      board.notes, notesBy, notesAt                         Upgrades notes
+   One-sided boards have no Starter | Upgrades toggle: future rooms and
+   "general" boards like General layout (board.general = true).
    Future rooms (board.addition = an addition's id, board.dims = its size)
    belong to an addition on the Plans page. They have no Starter | Upgrades
    toggle: one set of photos and notes (stored like the Upgrades side).
@@ -13,6 +15,8 @@
 const Rooms = (() => {
   let lovedOnly = false;
   let dragControl = null;
+  let focusOpen = false;
+  document.addEventListener('toggle', e => { if (e.target.matches && e.target.matches('details.focus')) focusOpen = e.target.open; }, true);
   let side = 'starter';
   let openBoard = null;
 
@@ -23,6 +27,7 @@ const Rooms = (() => {
 
   // Suggested things to decide, by the kind of room (matched from its name).
   const FOCUS = [
+    [/layout|flow/, ['Kitchen & dining', 'Living & kitchen', 'Entry & mudroom', 'Bedrooms & baths', 'Laundry', 'Hallways', 'Outdoor access', 'Room to add on']],
     [/kitchen/, ['Cabinets', 'Countertops', 'Island', 'Pantry', 'Backsplash', 'Sink & faucet', 'Appliances', 'Lighting', 'Flooring', 'Hardware']],
     [/pantry/, ['Shelving', 'Door', 'Counter space', 'Outlets', 'Lighting']],
     [/(primary|master).*bath/, ['Vanity', 'Shower', 'Tub', 'Tile', 'Countertops', 'Fixtures', 'Lighting', 'Storage']],
@@ -33,7 +38,7 @@ const Rooms = (() => {
     [/dining/, ['Light fixture', 'Flooring', 'Built-in hutch', 'Windows', 'Paint color']],
     [/mud|laundry/, ['Bench & lockers', 'Washer & dryer', 'Laundry sink', 'Cabinets', 'Folding counter', 'Flooring', 'Drop zone']],
     [/porch|deck|patio/, ['Depth', 'Ceiling', 'Columns', 'Railings', 'Ceiling fans', 'Lighting', 'Swing']],
-    [/outside|exterior/, ['Siding', 'Roof', 'Windows', 'Front door', 'Garage', 'Paint colors', 'Landscaping']],
+    [/outside|exterior/, ['Front porch', 'Back porch', 'Siding', 'Roof', 'Windows', 'Front door', 'Garage', 'Paint colors', 'Landscaping']],
     [/barn|homestead/, ['Barn', 'Chicken coop', 'Fencing', 'Water line', 'Power', 'Workshop', 'Storage']],
     [/garden|yard/, ['Garden beds', 'Fencing', 'Irrigation', 'Trees', 'Patio', 'Fire pit']],
     [/office|study/, ['Desk', 'Built-ins', 'Outlets', 'Lighting', 'Door']],
@@ -81,7 +86,7 @@ const Rooms = (() => {
       seen.add(p.topic);
       parts.push({ topic: true, label: p.topicLabel || p.topic, key: p.topic, text: '', pics: topicPins(b, s, p.topic), extra: s === 'starter' ? extraOf(b, p.topic) : 0 });
     });
-    if (s === 'starter' && !b.addition) Object.entries(b.starterExtras || {}).forEach(([key, x]) => {
+    if (s === 'starter' && !oneSided(b)) Object.entries(b.starterExtras || {}).forEach(([key, x]) => {
       if (seen.has(key) || !(x && x.amount > 0)) return;
       seen.add(key);
       parts.push({ topic: true, label: x.label || key, key, text: '', pics: [], extra: x.amount });
@@ -116,13 +121,13 @@ const Rooms = (() => {
     const added = [];
     const sh = sheet(label, `<form class="topic-form" novalidate>
       <label class="field"><span class="lbl">Note</span><textarea name="note" rows="4">${esc(part ? part.text : '')}</textarea></label>
-      ${s === 'starter' && !b.addition ? `<label class="field"><span class="lbl">Extra cost for the starter build (optional)</span>
+      ${s === 'starter' && !oneSided(b) ? `<label class="field"><span class="lbl">Extra cost for the starter build (optional)</span>
         <div class="inp has-pre"><i class="pre">+$</i><input name="extra" inputmode="decimal" value="${part && part.extra ? commas(part.extra) : ''}"></div>
         <small>For something fancier than builder-grade. It’s added to the Budget as a special starter item.</small></label>` : ''}
       <div class="field"><span class="lbl">Photos</span><div class="topic-photos"></div>
         <div class="btn-row"><button type="button" class="btn small ghost" data-pick>${icon('camera')} Choose photos</button>
         ${navigator.clipboard && navigator.clipboard.read ? '<button type="button" class="btn small ghost" data-paste>Paste photo</button>' : ''}</div></div>
-      <p class="muted small">Photos also go on the ${b.addition ? '' : `${SIDES[s].toLowerCase()} side of the `}board, tagged “${esc(label)}.”</p>
+      <p class="muted small">Photos also go on the ${oneSided(b) ? '' : `${SIDES[s].toLowerCase()} side of the `}board, tagged “${esc(label)}.”</p>
       <p class="form-err" hidden></p>
       <div class="sheet-actions">${part ? '<button type="button" class="btn ghost danger" data-remove>Delete</button>' : ''}<span class="grow"></span><button class="btn" data-save>Save</button></div>
     </form>`);
@@ -213,6 +218,7 @@ const Rooms = (() => {
   const mainBoards = () => boards().filter(b => !b.addition);
   const futureBoards = addId => boards().filter(b => b.addition === addId);
   const siblings = b => (b.addition ? futureBoards(b.addition) : mainBoards());
+  const oneSided = b => !!(b.addition || b.general);
   const boardLabel = b => { const a = b.addition && get(b.addition); return a ? `${b.name} (${a.name})` : b.name; };
   // Photos you've rearranged keep their spot; new ones show up first.
   const pinsIn = id => kind('pin').filter(p => p.board === id).sort((a, b) => {
@@ -234,7 +240,7 @@ const Rooms = (() => {
       return {
         photo: p.photo,
         title: p.caption || '',
-        sub: [p.topic && `<b>${esc(p.topicLabel || p.topic)}</b>`, board && (board.addition ? `${esc(board.name)} · Future room` : `${esc(board.name)} · ${SIDES[sideOf(p)]}`), byLine(p), p.link && `<a href="${esc(p.link)}" target="_blank" rel="noopener">Open link</a>`].filter(Boolean).join(' · '),
+        sub: [p.topic && `<b>${esc(p.topicLabel || p.topic)}</b>`, board && (board.addition ? `${esc(board.name)} · Future room` : board.general ? esc(board.name) : `${esc(board.name)} · ${SIDES[sideOf(p)]}`), byLine(p), p.link && `<a href="${esc(p.link)}" target="_blank" rel="noopener">Open link</a>`].filter(Boolean).join(' · '),
         actions: [
           { label: `${icon('heart', p.fav ? 'filled' : '')} ${p.fav ? 'Loved' : 'Love'}`, fn: async () => {
             await DB.update(p.id, { fav: !p.fav });
@@ -250,7 +256,7 @@ const Rooms = (() => {
               save: async v => { await DB.update(p.id, v); resolve({ item: item({ ...p, ...v }) }); },
             });
           }) },
-          ...(board && board.addition ? [] : [{ label: `Move to ${sideOf(p) === 'starter' ? 'Upgrades' : 'Starter'}`, fn: async () => {
+          ...(board && oneSided(board) ? [] : [{ label: `Move to ${sideOf(p) === 'starter' ? 'Upgrades' : 'Starter'}`, fn: async () => {
             const to = sideOf(p) === 'starter' ? 'upgrade' : 'starter';
             await DB.update(p.id, { side: to });
             toast(`Moved to ${SIDES[to]}`);
@@ -315,7 +321,7 @@ const Rooms = (() => {
     },
     acts: {
       notes(el) {
-        const b = get(el.dataset.id), key = noteKey(side), future = !!b.addition;
+        const b = get(el.dataset.id), key = noteKey(side), future = oneSided(b);
         // A suggestion chip adds "Cabinets: " on a new line, ready to type.
         const topic = el.dataset.topic;
         const cur = (b[key] || '').replace(/\s+$/, '');
@@ -409,7 +415,8 @@ const Rooms = (() => {
     if (openBoard !== id) { openBoard = id; side = 'starter'; lovedOnly = false; }
     // Future rooms have one set of photos and notes (kept as the Upgrades side).
     const add = b.addition && get(b.addition);
-    if (b.addition) side = 'upgrade';
+    const single = oneSided(b);
+    if (single) side = 'upgrade';
     const dims = b.addition && Size.parse(b.dims);
     const feel = dims && Size.compare(dims, kind('room'), b.name);
     const every = pinsIn(id);
@@ -425,25 +432,25 @@ const Rooms = (() => {
       sub: add ? `Future room · ${esc(add.name)}${dims ? ` · ${Size.dims(dims)}` : ''}` : `${every.length} photo${every.length === 1 ? '' : 's'}`,
       right: `<button class="icon-btn" data-act="editBoard" data-id="${id}" aria-label="Edit board">${icon('edit')}</button>`,
     })}
-    ${add ? (feel ? `<p class="feel-line">${esc(feel.text)}</p>` : '') : `<div class="side-toggle" role="tablist" aria-label="Starter or upgrades">
+    ${single ? (feel ? `<p class="feel-line">${esc(feel.text)}</p>` : '') : `<div class="side-toggle" role="tablist" aria-label="Starter or upgrades">
       ${Object.entries(SIDES).map(([k, label]) => `<button role="tab" aria-selected="${side === k}" class="${side === k ? 'on' : ''}" data-act="side" data-side="${k}">${label}<span>${count(k)}</span></button>`).join('')}
     </div>`}
     ${parts.length ? `<section class="card pad notes-card">
-      <div class="row-head"><h2>${icon('note')} ${add ? 'Notes' : `${SIDES[side]} notes`}</h2><button class="btn small ghost" data-act="notes" data-id="${id}">Edit all</button></div>
+      <div class="row-head"><h2>${icon('note')} ${single ? 'Notes' : `${SIDES[side]} notes`}</h2><button class="btn small ghost" data-act="notes" data-id="${id}">Edit all</button></div>
       <div class="notes clamp">${parts.map(x => x.topic ? `<div class="topic-line">
           <button class="tl-txt" data-act="topic" data-id="${id}" data-topic="${esc(x.label)}"><b>${esc(x.label)}:</b> ${x.text ? esc(x.text) : `<span class="muted">${x.pics.length ? 'photos only' : 'extra cost'}</span>`}${x.extra ? ` <span class="badge prep">+${money(x.extra)}</span>` : ''}</button>
           ${x.pics.length ? `<span class="tl-pics">${x.pics.slice(0, 3).map(p => `<button class="tl-pic" data-act="topicPhoto" data-id="${id}" data-key="${x.key}" data-pin="${p.id}"><img src="${esc(thumb(p.photo))}" alt="${esc(x.label)} photo" loading="lazy"></button>`).join('')}${x.pics.length > 3 ? `<span class="tl-more">+${x.pics.length - 3}</span>` : ''}</span>` : ''}
         </div>` : `<p>${esc(x.text)}</p>`).join('')}</div>
       <button class="linkish more" data-act="more" hidden>Show more</button>
       ${b[`${key}At`] ? `<p class="muted small">Updated${personName(b[`${key}By`]) ? ` by ${esc(personName(b[`${key}By`]))}` : ''} · ${niceDate(b[`${key}At`])}</p>` : ''}
-    </section>` : `<button class="add-notes" data-act="notes" data-id="${id}">${icon('note')} Add ${add ? '' : side === 'starter' ? 'starter ' : 'upgrade '}notes for the ${esc(b.name.toLowerCase())}</button>`}
-    <div class="focus">
-      <p class="lbl">Things to decide <span class="muted">· tap one to add a note and photos</span></p>
+    </section>` : `<button class="add-notes" data-act="notes" data-id="${id}">${icon('note')} Add ${single ? '' : side === 'starter' ? 'starter ' : 'upgrade '}notes${b.general ? '' : ` for the ${esc(b.name.toLowerCase())}`}</button>`}
+    <details class="focus"${focusOpen ? ' open' : ''}>
+      <summary class="focus-plus" aria-label="Things to decide">+</summary>
       <div class="focus-chips">${focusFor(b).map(t => {
         const done = parts.some(x => x.topic && x.key === labelKey(t));
         return `<button class="chip${done ? ' on' : ''}" data-act="topic" data-id="${id}" data-topic="${esc(t)}">${done ? '✓ ' : '+ '}${esc(t)}</button>`;
       }).join('')}</div>
-    </div>
+    </details>
     <div class="bar-row">
       <button class="btn" data-act="addPhotos" data-id="${id}">${icon('camera')} Add photos</button>
       ${lovedN ? `<button class="chip${lovedOnly ? ' on' : ''}" data-act="loved">${icon('heart', 'tiny filled')} Loved (${lovedN})</button>` : ''}
@@ -456,10 +463,11 @@ const Rooms = (() => {
       </figure>`).join('')}</div>
 `
       : lovedOnly ? empty('heart', 'No loved photos', 'Tap the heart on a photo to love it.')
+        : b.general ? empty('camera', 'No photos yet', 'Add photos of layouts you like: how the kitchen opens to the dining room, where the mudroom meets the entry, and so on.')
         : add ? empty('camera', 'No photos yet', 'Add ideas for this room: screenshots from Pinterest, Instagram, anything you love.')
         : side === 'starter' ? empty('camera', 'No starter photos yet', 'Add what you’ll build with first: builder-grade finishes, model home photos, the basic version.')
           : empty('camera', 'No upgrade photos yet', 'Add the dream version: screenshots from Pinterest, Instagram, anything you love.')}`;
   }
 
-  return { view, boards, mainBoards, futureBoards, pinsIn, notesOf, SIDES, sideInfo, parseNotes, coverOf, topicPins, starterExtras };
+  return { oneSided, view, boards, mainBoards, futureBoards, pinsIn, notesOf, SIDES, sideInfo, parseNotes, coverOf, topicPins, starterExtras };
 })();

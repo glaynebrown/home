@@ -207,7 +207,7 @@ const Money = (() => {
   // Wishlist view: every room with something on its board, in board order;
   // cost items for rooms without a board go last.
   function byRoom(list) {
-    const boards = Rooms.mainBoards();
+    const boards = Rooms.mainBoards().filter(b => !Rooms.oneSided(b));
     const key = s => String(s || '').trim().toLowerCase();
     const names = new Set(boards.map(b => key(b.name)));
     const cards = boards.map(b => roomCard(b, list.filter(u => key(u.room) === key(b.name)))).join('');
